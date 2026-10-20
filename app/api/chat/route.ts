@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import { saveChatMessages } from '@/lib/db';
-import { openai } from '@ai-sdk/openai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { streamText } from 'ai';
+
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY || '',
+});
 
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, chatId, title } = body;
+    const { messages, chatId, title, model } = body;
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
@@ -17,11 +21,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Wandelt Frontend-Nachrichten (z.B. mit parts-Array) in das vom AI SDK erwartete Format um
     const formattedMessages = messages.map((m: any) => {
       let content = m.content;
-      
-      // Falls content leer ist, aber parts vorhanden sind (wie im Log gesehen)
       if (!content && Array.isArray(m.parts)) {
         content = m.parts
           .filter((p: any) => p.type === 'text')
@@ -35,11 +36,14 @@ export async function POST(req: Request) {
       };
     });
 
+    // Nutzt das exakt vom Frontend übergebene Modell über OpenRouter (wie lokal)
+    const activeModel = model || 'deepseek/deepseek-chat';
+
     const activeChatId = chatId || `chat-${Date.now()}`;
     const activeTitle = title || formattedMessages[0]?.content?.slice(0, 30) || 'Neuer Chat';
 
     const result = await streamText({
-      model: openai('gpt-4o-mini'),
+      model: openrouter(activeModel),
       messages: formattedMessages,
       onFinish: async ({ text }) => {
         try {
