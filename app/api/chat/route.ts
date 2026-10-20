@@ -1,19 +1,17 @@
-/**
- * app/api/chats/route.ts
- * =============================================================================
- * Endpunkt /api/chats: Lädt die Liste aller gespeicherten Chats aus Neon.
- * =============================================================================
- */
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
+/** Eine Zeile aus der Tabelle "chats" in Neon PostgreSQL */
 interface ChatRow {
   id: string;
   title: string;
   created_at: string;
 }
 
-
+/**
+ * GET /api/chats
+ * Lädt alle gespeicherten Chats aus der Neon PostgreSQL-Datenbank.
+ */
 export async function GET() {
   try {
     const chats = (await sql`
@@ -24,7 +22,7 @@ export async function GET() {
 
     return NextResponse.json(chats);
   } catch (error) {
-    console.error('Fehler beim Laden der Chatliste:', error);
+    console.error('Fehler beim Laden der Chatliste aus Neon:', error);
     return NextResponse.json(
       { error: 'Fehler beim Laden der Chats' },
       { status: 500 }

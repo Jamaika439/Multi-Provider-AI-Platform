@@ -1,63 +1,30 @@
-/**
- * app/api/chats/route.ts
- * =============================================================================
- * Endpunkt /api/chats: die Liste aller Chats für die Seitenleiste.
- *
- *  - GET  /api/chats  liefert alle Chats, neueste zuerst.
- *  - POST /api/chats  legt einen leeren Chat an (falls es ihn noch nicht gibt).
- *
- * Die Nachrichten eines einzelnen Chats liegen in app/api/chats/[id]/route.ts.
- * =============================================================================
- */
 import { NextResponse } from 'next/server';
+import { sql } from '@/lib/db';
 
-import { getDb, queryAll, saveDb } from '@/lib/db';
-
-/** Eine Zeile aus der Tabelle "chats". */
-interface ChatRow extends Record<string, string | number | null | Uint8Array> {
+interface ChatRow {
   id: string;
-  title: string | null;
+  title: string;
   created_at: string;
 }
 
-/** Alle Chats laden, sortiert nach Erstellzeit. `rowid` entscheidet bei gleicher Sekunde. */
+/**
+ * GET /api/chats
+ * Lädt die Liste aller gespeicherten Chats aus der Neon PostgreSQL-Datenbank.
+ */
 export async function GET() {
   try {
-    const db = await getDb();
-    const chats = queryAll<ChatRow>(
-      db,
-      'SELECT id, title, created_at FROM chats ORDER BY created_at DESC, rowid DESC'
-    );
+    const chats = (await sql`
+      SELECT id, title, created_at 
+      FROM chats 
+      ORDER BY created_at DESC
+    `) as ChatRow[];
 
     return NextResponse.json(chats);
   } catch (error) {
-    console.error('Chats laden fehlgeschlagen:', error);
-    return NextResponse.json({ error: 'Fehler beim Laden' }, { status: 500 });
-  }
-}
-
-/**
- * Legt einen Chat an. INSERT OR IGNORE sorgt dafür, dass ein zweiter Aufruf mit
- * derselben ID nichts überschreibt (der Titel bleibt erhalten).
- */
-export async function POST(req: Request) {
-  try {
-    const { id, title } = await req.json();
-
-    if (typeof id !== 'string' || !id.trim()) {
-      return NextResponse.json({ error: 'Chat-ID fehlt' }, { status: 400 });
-    }
-
-    const db = await getDb();
-    db.run('INSERT OR IGNORE INTO chats (id, title) VALUES (?, ?)', [
-      id,
-      typeof title === 'string' && title.trim() ? title : 'Neuer Chat',
-    ]);
-    saveDb(db);
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Chat speichern fehlgeschlagen:', error);
-    return NextResponse.json({ error: 'Fehler beim Speichern' }, { status: 500 });
+    console.error('Fehler beim Laden der Chatliste aus Neon:', error);
+    return NextResponse.json(
+      { error: 'Fehler beim Laden der Chats' },
+      { status: 500 }
+    );
   }
 }
