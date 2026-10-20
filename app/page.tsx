@@ -156,7 +156,7 @@ const IMAGE_MARKDOWN =
   /!\[[^\]]*\]\((https:\/\/image\.pollinations\.ai\/[^)\s]+)\)/;
 
 /** Modelle, nach Gruppen sortiert, einmal berechnet für das Dropdown. */
-const MODEL_GROUPS = getModelGroups();
+
 
 /**
  * Verbindung zum Server. Wird EINMAL außerhalb der Komponente angelegt: Würde
@@ -260,6 +260,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] =
     useState<ModelKey>(DEFAULT_MODEL);
 
+ const [onlyFree, setOnlyFree] = useState(true);
   /**
    * ID des aktuell offenen Chats. Sie wird beim Senden mit an den Server
    * geschickt, der damit den Verlauf in der Datenbank ablegt.
@@ -339,14 +340,15 @@ export default function Home() {
     });
 
   // Abgeleitete Werte, werden bei jedem Rendern aus dem State berechnet.
-  const isLoading = status === 'submitted' || status === 'streaming';
-  const isImageModel = selectedModel === IMAGE_MODEL;
-  const selectedModelLabel =
-    MODELS.find((model) => model.key === selectedModel)?.label ?? '';
+ const isLoading = status === 'submitted' || status === 'streaming';
+const isImageModel = selectedModel === IMAGE_MODEL;
 
-  /** Zeigt die eigene Meldung, sonst den Fehler von useChat. */
-  const shownError = errorMessage || error?.message || '';
+const selectedModelDef = MODELS.find((model) => model.key === selectedModel);
+const selectedModelLabel = selectedModelDef?.label ?? '';
 
+const modelGroups = getModelGroups(onlyFree);
+
+const shownError = errorMessage || error?.message || '';
   // ---------------------------------------------------------------------------
   // Effekte: Code, der bei bestimmten Änderungen läuft
   // ---------------------------------------------------------------------------
@@ -820,36 +822,72 @@ export default function Home() {
             Neuer Chat
           </button>
 
-          {/* Modell-Dropdown, gefüllt aus lib/models.ts */}
-          <div className="mt-2 flex flex-col gap-1.5">
-            <label
-              htmlFor="model-select"
-              className="text-xs font-semibold uppercase tracking-wider text-zinc-400"
-            >
-              Modell wählen
-            </label>
+          {/* Modell-Filter + Dropdown */}
+<div className="mt-2 flex flex-col gap-2">
+  <div className="flex items-center justify-between">
+    <label
+      htmlFor="model-select"
+      className="text-xs font-semibold uppercase tracking-wider text-zinc-400"
+    >
+      Modell wählen
+    </label>
 
-            <select
-              id="model-select"
-              value={selectedModel}
-              onChange={(event) => {
-                setSelectedModel(event.target.value as ModelKey);
-                setErrorMessage('');
-                clearError();
-              }}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-zinc-700"
-            >
-              {MODEL_GROUPS.map(({ group, models }) => (
-                <optgroup key={group} label={group}>
-                  {models.map((model) => (
-                    <option key={model.key} value={model.key}>
-                      {model.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+    <button
+      type="button"
+      onClick={() => {
+        const nextOnlyFree = !onlyFree;
+        setOnlyFree(nextOnlyFree);
+
+        if (nextOnlyFree) {
+          const current = MODELS.find((m) => m.key === selectedModel);
+          if (current && !current.isFree) {
+            setSelectedModel(DEFAULT_MODEL);
+          }
+        }
+      }}
+      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${
+        onlyFree
+          ? 'bg-emerald-900/60 text-emerald-300 ring-1 ring-emerald-700/50'
+          : 'bg-amber-900/40 text-amber-300 ring-1 ring-amber-700/40'
+      }`}
+      title={
+        onlyFree
+          ? 'Nur Free-/Limit-Modelle'
+          : 'Alle Modelle inkl. bezahlter'
+      }
+    >
+      {onlyFree ? '🆓 Free' : '💰 Alle'}
+    </button>
+  </div>
+
+  <select
+    id="model-select"
+    value={selectedModel}
+    onChange={(event) => {
+      setSelectedModel(event.target.value as ModelKey);
+      setErrorMessage('');
+      clearError();
+    }}
+    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-zinc-700"
+  >
+    {modelGroups.map(({ group, models }) => (
+      <optgroup key={group} label={group}>
+        {models.map((model) => (
+          <option key={model.key} value={model.key}>
+            {model.isFree ? '🆓 ' : '💰 '}
+            {model.label}
+          </option>
+        ))}
+      </optgroup>
+    ))}
+  </select>
+
+  <p className="text-[10px] leading-tight text-zinc-500">
+    {onlyFree
+      ? 'Nur Modelle mit Free-Tier / Rate-Limits'
+      : 'Bezahlte Modelle (z. B. OpenAI) verbrauchen Guthaben'}
+  </p>
+</div>
 
           {/* Chatverlauf */}
           <div className="mt-4 flex min-h-0 flex-col gap-1 overflow-y-auto pr-1">
