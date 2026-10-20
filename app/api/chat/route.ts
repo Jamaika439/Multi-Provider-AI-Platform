@@ -70,6 +70,7 @@ export async function POST(req: Request) {
     const result = await streamText({
       model: languageModel,
       messages: formattedMessages,
+      maxTokens: 4096,
       onFinish: async ({ text }) => {
         try {
           await saveChatMessages(activeChatId, activeTitle, [
