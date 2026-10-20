@@ -1,24 +1,38 @@
 import { NextResponse } from 'next/server';
-import { sql, saveChatMessages } from '@/lib/db';
+import { saveChatMessages } from '@/lib/db';
+import { openai } from '@ai-sdk/openai';
+import { streamText } from 'ai';
+
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
-    const { chatId, title, messages } = await req.json();
+    const body = await req.json();
+    const { messages, chatId, title } = body;
 
-    // KI-Verarbeitung / Response Generierung
-    // ...
+    const activeChatId = chatId || `chat-${Date.now()}`;
+    const activeTitle = title || messages[0]?.content?.slice(0, 30) || 'Neuer Chat';
 
-    // Nachrichten in Neon speichern
-    if (chatId && messages) {
-      await saveChatMessages(chatId, title || 'Neuer Chat', messages);
-    }
+    const result = await streamText({
+      model: openai('gpt-4o-mini'),
+      messages,
+      onFinish: async ({ text }) => {
+        try {
+          const fullMessages = [
+            ...messages,
+            { role: 'assistant', content: text || '' }
+          ];
+          await saveChatMessages(activeChatId, activeTitle, fullMessages);
+        } catch (dbError) {
+          console.error('Fehler beim Speichern:', dbError);
+        }
+      },
+    });
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
+    // Ersetzt toDataStreamResponse() durch den direkten Stream-Return
+    return result.toAIStreamResponse();
+  } catch (error: any) {
     console.error('Fehler in /api/chat:', error);
-    return NextResponse.json(
-      { error: 'Fehler beim Verarbeiten der Nachricht' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
