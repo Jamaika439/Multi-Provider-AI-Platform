@@ -1,4 +1,3 @@
-// app/api/chat/route.ts
 import { NextResponse } from 'next/server';
 import { streamText } from 'ai';
 import { saveChatMessages } from '@/lib/db';
@@ -20,11 +19,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Modell auflösen
     const modelDef = findModel(modelKey) ?? findModel('gemini-3.8-flash')!;
     const activeChatId = chatId || `chat-${Date.now()}`;
 
-    // Nachrichten für das AI SDK formatieren
+    // Nachrichten formatieren
     const formattedMessages = messages.map((m: any) => {
       let content = m.content;
       if (!content && Array.isArray(m.parts)) {
@@ -36,36 +34,37 @@ export async function POST(req: Request) {
       };
     });
 
-    // Titel aus erster User-Nachricht
     const firstUserText =
       formattedMessages.find((m) => m.role === 'user')?.content || '';
     const activeTitle = makeChatTitle(firstUserText);
 
-    // Spezieller Fall: Bildgenerierung (Pollinations)
+    // === Bildgenerierung (Pollinations) ===
     if (modelDef.key === IMAGE_MODEL || modelDef.provider === 'image') {
-      const prompt = formattedMessages[formattedMessages.length - 1]?.content || '';
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
-      const markdown = `![Generiertes Bild](${imageUrl})`;
+      const prompt =
+        formattedMessages[formattedMessages.length - 1]?.content || '';
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+        prompt
+      )}?width=1024&height=1024&nologo=true`;
+      const imageMarkdown = `![Generiertes Bild](${imageUrl})`;
 
-      // Speichern
       await saveChatMessages(activeChatId, activeTitle, [
         ...formattedMessages,
-        { role: 'assistant', content: markdown },
+        { role: 'assistant', content: imageMarkdown },
       ]);
 
-      // Als Stream zurückgeben (einfacher Text-Stream)
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(new TextEncoder(markdown));
+          controller.enqueue(new TextEncoder(imageMarkdown));
           controller.close();
         },
       });
+
       return new Response(stream, {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       });
     }
 
-    // Normales Sprachmodell
+    // === Normales Sprachmodell ===
     const languageModel = getLanguageModel(modelDef);
 
     const result = await streamText({
