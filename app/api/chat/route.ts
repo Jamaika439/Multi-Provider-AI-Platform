@@ -1,30 +1,23 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { sql, saveChatMessages } from '@/lib/db';
 
-/** Eine Zeile aus der Tabelle "chats" in Neon PostgreSQL */
-interface ChatRow {
-  id: string;
-  title: string;
-  created_at: string;
-}
-
-/**
- * GET /api/chats
- * Lädt alle gespeicherten Chats aus der Neon PostgreSQL-Datenbank.
- */
-export async function GET() {
+export async function POST(req: Request) {
   try {
-    const chats = (await sql`
-      SELECT id, title, created_at 
-      FROM chats 
-      ORDER BY created_at DESC
-    `) as ChatRow[];
+    const { chatId, title, messages } = await req.json();
 
-    return NextResponse.json(chats);
+    // KI-Verarbeitung / Response Generierung
+    // ...
+
+    // Nachrichten in Neon speichern
+    if (chatId && messages) {
+      await saveChatMessages(chatId, title || 'Neuer Chat', messages);
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Fehler beim Laden der Chatliste aus Neon:', error);
+    console.error('Fehler in /api/chat:', error);
     return NextResponse.json(
-      { error: 'Fehler beim Laden der Chats' },
+      { error: 'Fehler beim Verarbeiten der Nachricht' },
       { status: 500 }
     );
   }
