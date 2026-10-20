@@ -41,8 +41,8 @@ export interface StoredMessage {
   `;
 
   for (const message of messages) {
-    // Falls message.content null/undefined ist, als Leerstring "" speichern
-    const content = message.content ?? '';
+    // Erzwingt, dass niemals null oder undefined übergeben wird
+    const content = message?.content ? String(message.content) : '';
     
     await sql`
       INSERT INTO messages (chat_id, role, content)
