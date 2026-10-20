@@ -41,12 +41,14 @@ export interface StoredMessage {
   `;
 
   for (const message of messages) {
-    // Erzwingt, dass niemals null oder undefined übergeben wird
-    const content = message?.content ? String(message.content) : '';
+    // Erzwingt einen String, selbst wenn message.content fehlt oder null ist
+    const safeContent = message.content !== null && message.content !== undefined 
+      ? String(message.content) 
+      : '';
     
     await sql`
       INSERT INTO messages (chat_id, role, content)
-      VALUES (${chatId}, ${message.role}, ${content})
+      VALUES (${chatId}, ${message.role}, ${safeContent})
     `;
   }
 }
