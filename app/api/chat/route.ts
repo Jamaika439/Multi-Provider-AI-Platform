@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(new TextEncoder(imageMarkdown));
+          controller.enqueue(new TextEncoder().encode(imageMarkdown));
           controller.close();
         },
       });
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     const result = await streamText({
       model: languageModel,
       messages: formattedMessages,
-      maxTokens: 4096,
+      maxOutputTokens: 4096,
       onFinish: async ({ text }) => {
         try {
           await saveChatMessages(activeChatId, activeTitle, [
