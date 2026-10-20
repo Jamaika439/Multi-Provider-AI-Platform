@@ -29,8 +29,8 @@ export async function POST(req: Request) {
       },
     });
 
-    // Ersetzt toDataStreamResponse() durch den direkten Stream-Return
-    return result.toAIStreamResponse();
+    // Korrekt für das aktuelle Vercel AI SDK:
+    return result.toTextStreamResponse();
   } catch (error: any) {
     console.error('Fehler in /api/chat:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
