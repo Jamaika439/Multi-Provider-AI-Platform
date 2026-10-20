@@ -1,30 +1,21 @@
 /**
  * app/api/chats/[id]/route.ts
  * =============================================================================
- * Endpunkt /api/chats/<chat-id>: ein einzelner Chat.
- *
- *  - GET    liefert alle Nachrichten des Chats (älteste zuerst).
- *  - DELETE löscht den Chat samt aller Nachrichten.
- *
- * "[id]" im Ordnernamen ist eine dynamische Route von Next.js: Der Teil der URL
- * an dieser Stelle steht als `params.id` zur Verfügung.
+ * Endpunkt /api/chats/<chat-id>: Lädt oder löscht einen spezifischen Chat
+ * aus der Neon-PostgreSQL-Datenbank.
  * =============================================================================
  */
 import { NextResponse } from 'next/server';
+import { sql } from '@/lib/db';
 
-import { getDb, queryAll, saveDb } from '@/lib/db';
-
-/** Eine Zeile aus der Tabelle "messages" (nur die Spalten, die wir brauchen). */
-interface MessageRow extends Record<string, string | number | null | Uint8Array> {
-  id: number;
+interface MessageRow {
+  id: string | number;
   role: string;
   content: string | null;
 }
 
 /**
- * Nachrichten eines Chats laden.
- * In dieser Next.js-Version ist `params` ein Promise und muss mit `await`
- * gelesen werden.
+ * Nachrichten eines Chats aus Neon abrufen.
  */
 export async function GET(
   _req: Request,
@@ -33,14 +24,13 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const db = await getDb();
-    const rows = queryAll<MessageRow>(
-      db,
-      'SELECT id, role, content FROM messages WHERE chat_id = ? ORDER BY id ASC',
-      [id]
-    );
+    const rows = (await sql`
+      SELECT id, role, content 
+      FROM messages 
+      WHERE chat_id = ${id} 
+      ORDER BY created_at ASC
+    `) as MessageRow[];
 
-    // Die Oberfläche bekommt IDs als Text. Fehlender Inhalt wird zu "".
     return NextResponse.json(
       rows.map((row) => ({
         id: String(row.id),
@@ -58,8 +48,7 @@ export async function GET(
 }
 
 /**
- * Chat und Nachrichten löschen. Beides in einer Transaktion, damit nie
- * verwaiste Nachrichten ohne Chat (oder umgekehrt) übrig bleiben.
+ * Chat und zugehörige Nachrichten in Neon löschen.
  */
 export async function DELETE(
   _req: Request,
@@ -68,19 +57,10 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const db = await getDb();
-
-    db.run('BEGIN');
-    try {
-      db.run('DELETE FROM messages WHERE chat_id = ?', [id]);
-      db.run('DELETE FROM chats WHERE id = ?', [id]);
-      db.run('COMMIT');
-    } catch (error) {
-      db.run('ROLLBACK');
-      throw error;
-    }
-
-    saveDb(db);
+    // Falls du in Neon ON DELETE CASCADE konfiguriert hast, löscht
+    // das Entfernen aus 'chats' automatisch auch die Nachrichten.
+    await sql`DELETE FROM messages WHERE chat_id = ${id}`;
+    await sql`DELETE FROM chats WHERE id = ${id}`;
 
     return NextResponse.json({ success: true });
   } catch (error) {
