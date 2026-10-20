@@ -20,12 +20,12 @@ export interface ModelDefinition {
   group: string;
   provider: ProviderName;
   id: string;
-  /** true = Free-Tier / Rate-Limits, false = bezahlt / unlimitiert (wenn Guthaben da) */
+  /** true = Free-Tier / Rate-Limits, false = bezahlt */
   isFree: boolean;
 }
 
 export const MODELS = [
-  // --- Google AI Studio (Free-Tier vorhanden) ---------------------------------
+  // --- Google AI Studio -------------------------------------------------------
   {
     key: 'gemini-3.8-flash',
     label: 'Gemini 3.8 Flash (Google)',
@@ -48,10 +48,10 @@ export const MODELS = [
     group: 'Google AI Studio',
     provider: 'google',
     id: 'gemini-3.1-pro-preview',
-    isFree: false, // meist bezahlt
+    isFree: false,
   },
 
-  // --- OpenAI (immer bezahlt) -------------------------------------------------
+  // --- OpenAI (bezahlt) -------------------------------------------------------
   {
     key: 'gpt-6-luna',
     label: 'GPT-6 Luna (OpenAI) – günstig',
@@ -77,7 +77,7 @@ export const MODELS = [
     isFree: false,
   },
 
-  // --- Groq (Free-Tier + sehr schnell) ----------------------------------------
+  // --- Groq -------------------------------------------------------------------
   {
     key: 'groq-gpt-oss-20b',
     label: 'GPT-OSS 20B (Groq, sehr schnell)',
@@ -102,7 +102,7 @@ export const MODELS = [
     group: 'Cohere',
     provider: 'cohere',
     id: 'command-a-03-2025',
-    isFree: true, // Trial/Free-Tier
+    isFree: true,
   },
 
   // --- OpenRouter Free --------------------------------------------------------
@@ -147,7 +147,7 @@ export const MODELS = [
     isFree: true,
   },
 
-  // --- Werkzeuge --------------------------------------------------------------
+  // --- Tools ------------------------------------------------------------------
   {
     key: 'pollinations-image',
     label: 'Bildgenerierung (Pollinations)',
