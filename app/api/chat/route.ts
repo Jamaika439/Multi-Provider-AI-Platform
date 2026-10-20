@@ -13,6 +13,7 @@ interface ChatRow {
   created_at: string;
 }
 
+
 export async function GET() {
   try {
     const chats = (await sql`
