@@ -24,30 +24,29 @@ export interface StoredMessage {
  * 
  * - Legt den Chat mit `title` an (falls neu). Bei Konflikt bleibt der bestehende Titel erhalten.
  * - Löscht alte Nachrichten des Chats und fügt den aktuellen Stand sauber neu ein.
- */
-export async function saveChatMessages(
+ */export async function saveChatMessages(
   chatId: string,
   title: string,
   messages: StoredMessage[]
 ) {
-  // 1. Chat anlegen oder unverändert lassen, falls er existiert
   await sql`
     INSERT INTO chats (id, title)
     VALUES (${chatId}, ${title})
     ON CONFLICT (id) DO NOTHING
   `;
 
-  // 2. Bestehende Nachrichten des Chats aufräumen
   await sql`
     DELETE FROM messages
     WHERE chat_id = ${chatId}
   `;
 
-  // 3. Nachrichten neu einfügen
   for (const message of messages) {
+    // Falls message.content null/undefined ist, als Leerstring "" speichern
+    const content = message.content ?? '';
+    
     await sql`
       INSERT INTO messages (chat_id, role, content)
-      VALUES (${chatId}, ${message.role}, ${message.content})
+      VALUES (${chatId}, ${message.role}, ${content})
     `;
   }
 }
