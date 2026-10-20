@@ -1,10 +1,3 @@
-/**
- * app/api/chats/[id]/route.ts
- * =============================================================================
- * Endpunkt /api/chats/<chat-id>: Lädt oder löscht einen spezifischen Chat
- * aus der Neon-PostgreSQL-Datenbank.
- * =============================================================================
- */
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
@@ -15,7 +8,8 @@ interface MessageRow {
 }
 
 /**
- * Nachrichten eines Chats aus Neon abrufen.
+ * GET /api/chats/[id]
+ * Lädt die Nachrichten eines spezifischen Chats aus Neon.
  */
 export async function GET(
   _req: Request,
@@ -48,7 +42,8 @@ export async function GET(
 }
 
 /**
- * Chat und zugehörige Nachrichten in Neon löschen.
+ * DELETE /api/chats/[id]
+ * Löscht einen Chat und seine Nachrichten aus Neon.
  */
 export async function DELETE(
   _req: Request,
@@ -57,14 +52,15 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // Falls du in Neon ON DELETE CASCADE konfiguriert hast, löscht
-    // das Entfernen aus 'chats' automatisch auch die Nachrichten.
     await sql`DELETE FROM messages WHERE chat_id = ${id}`;
     await sql`DELETE FROM chats WHERE id = ${id}`;
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Chat löschen fehlgeschlagen:', error);
-    return NextResponse.json({ error: 'Fehler beim Löschen' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Fehler beim Löschen' },
+      { status: 500 }
+    );
   }
 }
