@@ -1,24 +1,8 @@
 /**
  * app/page.tsx
  * =============================================================================
- * Die komplette Chat-Oberfläche (läuft im Browser, daher 'use client').
- *
- * Aufbau der Datei:
- *   1. Typen              Formen der Daten, mit denen die Oberfläche arbeitet
- *   2. Konstanten         Limits, Muster, Modellgruppen
- *   3. GeneratedImage     kleine Komponente für erzeugte Bilder (mit Wiederholung)
- *   4. Home               die Hauptkomponente
- *        - State          alles, was sich ändern kann (Eingabe, Chats, Fehler ...)
- *        - Chatverlauf    laden, neu anlegen, löschen
- *        - Dateien        Upload per Button oder Drag-and-drop
- *        - Diktieren      Spracherkennung des Browsers
- *        - Senden         Nachricht bauen und abschicken
- *        - JSX            die sichtbare Oberfläche
- *
- * Zusammenspiel mit dem Server:
- *   - useChat (Vercel AI SDK) schickt Nachrichten an /api/chat und zeigt die
- *     gestreamte Antwort live an.
- *   - Die Chatliste und gespeicherte Verläufe kommen von /api/chats.
+ * Vollständige Chat-Oberfläche inkl. Responsive-Support (600px - 1200px)
+ * und integriertem Panel für autonome KI-Agenten.
  * =============================================================================
  */
 'use client';
@@ -31,7 +15,9 @@ import { DefaultChatTransport, type UIMessage } from 'ai';
 import {
   Bot,
   CheckCircle2,
+  Cpu,
   FileText,
+  Menu,
   MessageSquare,
   Mic,
   MicOff,
@@ -40,6 +26,7 @@ import {
   Send,
   Sparkles,
   Square,
+  Terminal,
   Trash2,
   User,
   X,
@@ -63,21 +50,18 @@ import {
 // 1. Typen
 // =============================================================================
 
-/** Ein Eintrag in der Chatliste der Seitenleiste (Antwort von GET /api/chats). */
 interface ChatItem {
   id: string;
   title: string;
   created_at: string;
 }
 
-/** Eine gespeicherte Nachricht (Antwort von GET /api/chats/<id>): nur Klartext. */
 interface StoredChatMessage {
   id: string;
   role: string;
   content: string;
 }
 
-/** Ergebnis des Verbindungstests für einen API-Key (Antwort von GET /api/health). */
 interface KeyCheckResult {
   provider: string;
   keyName: string;
@@ -85,24 +69,16 @@ interface KeyCheckResult {
   ok: boolean;
   status: number | null;
   message: string;
-  /** Zusatzhinweis mit Erklärung und nächstem Schritt (optional). */
   hint?: string;
 }
 
-/** Eine Datei, die der Nutzer angehängt hat, aber noch nicht gesendet wurde. */
 interface AttachedFile {
   name: string;
   content: string;
   size: number;
-  /** true, wenn der Inhalt wegen des Zeichenlimits gekürzt wurde */
   truncated: boolean;
 }
 
-/*
- * Die Spracherkennung des Browsers ist noch nicht in den offiziellen
- * TypeScript-Typen enthalten. Diese Schnittstellen beschreiben nur den Teil,
- * den wir benutzen.
- */
 interface SpeechRecognitionEventLike {
   results: {
     [index: number]: {
@@ -129,7 +105,6 @@ interface SpeechRecognitionConstructor {
   new (): SpeechRecognitionLike;
 }
 
-/** Teilt TypeScript mit, dass `window` diese Spracherkennung haben kann. */
 declare global {
   interface Window {
     SpeechRecognition?: SpeechRecognitionConstructor;
@@ -141,56 +116,27 @@ declare global {
 // 2. Konstanten
 // =============================================================================
 
-/** Maximale Zeichenzahl pro angehängter Datei. Längere Dateien werden gekürzt. */
 const FILE_MAX_CHARS = 30_000;
-
-/** Maximale Zeichenzahl aller angehängten Dateien zusammen. */
 const TOTAL_FILE_MAX_CHARS = 80_000;
 
-/**
- * Erkennt ein von der Bildgenerierung erzeugtes Markdown-Bild und holt die URL
- * heraus. Es werden nur Pollinations-URLs akzeptiert, damit nie beliebige
- * fremde Adressen als Bild geladen werden.
- */
 const IMAGE_MARKDOWN =
   /!\[[^\]]*\]\((https:\/\/image\.pollinations\.ai\/[^)\s]+)\)/;
 
-/** Modelle, nach Gruppen sortiert, einmal berechnet für das Dropdown. */
-
-
-/**
- * Verbindung zum Server. Wird EINMAL außerhalb der Komponente angelegt: Würde
- * sie bei jedem Rendern neu entstehen, könnte useChat den Chat zurücksetzen.
- */
 const transport = new DefaultChatTransport({ api: '/api/chat' });
 
-/** Erzeugt eine neue, eindeutige Chat-ID wie "chat-3f2a...". */
 function createChatId() {
   return `chat-${crypto.randomUUID()}`;
 }
 
-/** Holt die Bild-URL aus einem Antworttext, oder null, wenn dort kein Bild steht. */
 function getImageUrl(text: string): string | null {
   return text.match(IMAGE_MARKDOWN)?.[1] ?? null;
 }
 
 // =============================================================================
-// 3. GeneratedImage: zeigt ein erzeugtes Bild und fängt Ladefehler ab
+// 3. GeneratedImage
 // =============================================================================
 
-/**
- * Pollinations erzeugt das Bild erst, wenn der Browser die URL abruft. Das
- * kann länger dauern, und der Dienst lehnt Anfragen gelegentlich ab (z. B.
- * wenn kurz zuvor schon ein Bild angefordert wurde).
- *
- * Deshalb: Schlägt das Laden fehl, wird nach 4 Sekunden automatisch EIN
- * weiterer Versuch gestartet. Klappt auch der nicht, erscheint eine Meldung
- * mit Button "Erneut versuchen". Ohne diese Komponente bliebe nur ein
- * kaputtes Bild-Symbol, und man müsste die Seite neu laden.
- */
 function GeneratedImage({ url }: { url: string }) {
-  // Zähler für Versuche. Ein Anhang wie "&retry=1" macht die URL neu, damit
-  // der Browser nicht das fehlgeschlagene Ergebnis aus dem Cache nimmt.
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
   const autoRetried = useRef(false);
@@ -199,12 +145,10 @@ function GeneratedImage({ url }: { url: string }) {
 
   const handleError = () => {
     if (!autoRetried.current) {
-      // Erster Fehler: nach kurzer Pause automatisch nochmal versuchen.
       autoRetried.current = true;
       setTimeout(() => setAttempt((value) => value + 1), 4000);
       return;
     }
-
     setFailed(true);
   };
 
@@ -220,7 +164,6 @@ function GeneratedImage({ url }: { url: string }) {
           Das Bild konnte nicht geladen werden. Der Bilddienst ist eventuell
           gerade ausgelastet.
         </p>
-
         <button
           type="button"
           onClick={retryManually}
@@ -234,7 +177,6 @@ function GeneratedImage({ url }: { url: string }) {
 
   return (
     <>
-      {/* Externe, dynamische URL: next/image ist hier nicht sinnvoll */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={src}
@@ -252,66 +194,39 @@ function GeneratedImage({ url }: { url: string }) {
 // =============================================================================
 
 export default function Home() {
-  // ---------------------------------------------------------------------------
-  // State: alles, was sich ändert und die Anzeige neu zeichnen lässt
-  // ---------------------------------------------------------------------------
-
-  /** Aktuell gewähltes Modell (Schlüssel aus lib/models.ts). */
-  const [selectedModel, setSelectedModel] =
-    useState<ModelKey>(DEFAULT_MODEL);
-
- const [onlyFree, setOnlyFree] = useState(true);
-  /**
-   * ID des aktuell offenen Chats. Sie wird beim Senden mit an den Server
-   * geschickt, der damit den Verlauf in der Datenbank ablegt.
-   */
+  const [selectedModel, setSelectedModel] = useState<ModelKey>(DEFAULT_MODEL);
+  const [onlyFree, setOnlyFree] = useState(true);
   const [chatId, setChatId] = useState(createChatId);
-
-  /** Chatliste für die Seitenleiste. */
   const [chats, setChats] = useState<ChatItem[]>([]);
-
-  /** Text im Eingabefeld. */
   const [input, setInput] = useState('');
-
-  /** Angehängte, noch nicht gesendete Dateien. */
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
-
-  /** true, solange der Nutzer eine Datei über das Fenster zieht. */
   const [isDragging, setIsDragging] = useState(false);
-
-  /** true, solange die Spracherkennung zuhört. */
   const [isListening, setIsListening] = useState(false);
-
-  /** Eigene Meldungen der Oberfläche (Upload-Hinweise, Ladefehler ...). */
   const [errorMessage, setErrorMessage] = useState('');
-
-  /** Ergebnisse des Verbindungstests (null = noch nicht ausgeführt). */
   const [keyResults, setKeyResults] = useState<KeyCheckResult[] | null>(null);
-
-  /** Welcher Verbindungstest läuft gerade? null = keiner. */
   const [checkingMode, setCheckingMode] = useState<'normal' | 'deep' | null>(
     null
   );
+
+  // Responsive Drawer-State (600px - 1200px)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // KI-Agent State
+  const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const [agentTab, setAgentTab] = useState<'logs' | 'tools'>('logs');
+
   const isCheckingKeys = checkingMode !== null;
 
-  // Refs: Verweise, die sich ändern dürfen, ohne die Anzeige neu zu zeichnen.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
-  // ---------------------------------------------------------------------------
-  // Chatliste laden
-  // ---------------------------------------------------------------------------
-
-  /** Holt die Chatliste vom Server. Wird nach jeder fertigen Antwort erneut aufgerufen. */
   const fetchChats = useCallback(async () => {
     try {
       const response = await fetch('/api/chats');
-
       if (!response.ok) {
         throw new Error('Die Chatliste konnte nicht geladen werden.');
       }
-
       const data: ChatItem[] = await response.json();
       setChats(data);
     } catch (error) {
@@ -319,82 +234,48 @@ export default function Home() {
     }
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // useChat: das Herzstück (AI SDK)
-  //   messages     alle Nachrichten des offenen Chats
-  //   sendMessage  schickt eine Nachricht an den Server
-  //   status       'ready' | 'submitted' (gesendet, wartet) | 'streaming' (Antwort läuft) | 'error'
-  //   setMessages  ersetzt den Verlauf (z. B. beim Laden eines alten Chats)
-  //   stop         bricht die laufende Antwort ab
-  //   error        letzter Fehler, z. B. vom Anbieter (falsche Modell-ID, kein Key ...)
-  //   clearError   setzt den Fehler zurück
-  // ---------------------------------------------------------------------------
   const { messages, sendMessage, status, setMessages, stop, error, clearError } =
     useChat<UIMessage>({
       transport,
-      // Nach jeder fertigen Antwort die Chatliste aktualisieren, damit neue
-      // Chats mit ihrem Titel erscheinen.
       onFinish: () => {
         void fetchChats();
       },
     });
 
-  // Abgeleitete Werte, werden bei jedem Rendern aus dem State berechnet.
- const isLoading = status === 'submitted' || status === 'streaming';
-const isImageModel = selectedModel === IMAGE_MODEL;
+  const isLoading = status === 'submitted' || status === 'streaming';
+  const isImageModel = selectedModel === IMAGE_MODEL;
+  const selectedModelDef = MODELS.find((model) => model.key === selectedModel);
+  const selectedModelLabel = selectedModelDef?.label ?? '';
+  const modelGroups = getModelGroups(onlyFree);
+  const shownError = errorMessage || error?.message || '';
 
-const selectedModelDef = MODELS.find((model) => model.key === selectedModel);
-const selectedModelLabel = selectedModelDef?.label ?? '';
-
-const modelGroups = getModelGroups(onlyFree);
-
-const shownError = errorMessage || error?.message || '';
-  // ---------------------------------------------------------------------------
-  // Effekte: Code, der bei bestimmten Änderungen läuft
-  // ---------------------------------------------------------------------------
-
-  // Chatliste einmal beim Start laden. Der State wird erst im Promise-Callback
-  // gesetzt, nicht synchron im Effekt (das würde ESLint zu Recht bemängeln).
+  // Chatliste beim Start laden
   useEffect(() => {
-    let cancelled = false;
+    void fetchChats();
+  }, [fetchChats]);
 
-    fetch('/api/chats')
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Die Chatliste konnte nicht geladen werden.');
-        }
-        return response.json() as Promise<ChatItem[]>;
-      })
-      .then((data) => {
-        if (!cancelled) setChats(data);
-      })
-      .catch((loadError) => {
-        console.error('Fehler beim Laden der Chats:', loadError);
-      });
-
-    // Aufräumen: Ist die Komponente weg, bevor die Antwort kommt, nichts mehr setzen.
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Bei jeder neuen Nachricht (und Statusänderung) ans Ende des Chats scrollen.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, status]);
 
-  // Beim Verlassen der Seite die Spracherkennung beenden.
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
     };
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Chatverlauf: neu anlegen, laden, löschen
-  // ---------------------------------------------------------------------------
+  // Escape schließt Sidebar-Drawer und Agent-Panel
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSidebarOpen(false);
+        setIsAgentOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
-  /** Setzt Eingabefeld, Anhänge und Fehlermeldungen zurück. */
   const resetComposer = () => {
     setInput('');
     setAttachedFiles([]);
@@ -402,28 +283,19 @@ const shownError = errorMessage || error?.message || '';
     clearError();
   };
 
-  /**
-   * Lädt einen gespeicherten Chat aus der Datenbank.
-   *
-   * Gespeichert ist nur Klartext (role + content). useChat braucht aber
-   * UIMessages mit "parts". Deshalb wird jede Nachricht hier umgebaut, sonst
-   * ließe sich der alte Chat nicht weiterführen.
-   */
   const loadChat = async (id: string) => {
     try {
-      // Läuft gerade noch eine Antwort, wird sie abgebrochen.
       void stop();
       setErrorMessage('');
       clearError();
+      setIsSidebarOpen(false); // Schließt Drawer auf Tablets/Mobilgeräten
 
       const response = await fetch(`/api/chats/${encodeURIComponent(id)}`);
-
       if (!response.ok) {
         throw new Error('Der Chat konnte nicht geladen werden.');
       }
 
       const history: StoredChatMessage[] = await response.json();
-
       const restored: UIMessage[] = history
         .filter(
           (message) => message.role === 'user' || message.role === 'assistant'
@@ -444,39 +316,29 @@ const shownError = errorMessage || error?.message || '';
     }
   };
 
-  /** Beginnt einen neuen, leeren Chat mit frischer ID. */
   const createNewChat = () => {
     void stop();
     setChatId(createChatId());
     setMessages([]);
     resetComposer();
+    setIsSidebarOpen(false); // Schließt Drawer auf Tablets/Mobilgeräten
   };
 
-  /**
-   * Löscht einen Chat auf dem Server und entfernt ihn aus der Liste.
-   * `stopPropagation` verhindert, dass der Klick auf das Papierkorb-Symbol
-   * gleichzeitig den Chat öffnet.
-   */
   const deleteChat = async (
     id: string,
     event: React.MouseEvent<HTMLButtonElement>
   ) => {
     event.stopPropagation();
-
     try {
       const response = await fetch(`/api/chats/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
-
       if (!response.ok) {
         throw new Error('Der Chat konnte nicht gelöscht werden.');
       }
-
       setChats((previousChats) =>
         previousChats.filter((chat) => chat.id !== id)
       );
-
-      // War der gelöschte Chat gerade offen, mit einem neuen weitermachen.
       if (chatId === id) {
         createNewChat();
       }
@@ -486,30 +348,11 @@ const shownError = errorMessage || error?.message || '';
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Dateien anhängen (Button oder Drag-and-drop)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Liest die gewählten Dateien als Text und hängt sie an.
-   *
-   * Schutzmaßnahmen:
-   *  - Bilder werden übersprungen (sie lassen sich nicht als Text lesen).
-   *  - Binärdateien (PDF, ZIP ...) enthalten Nullzeichen und werden abgelehnt,
-   *    sonst käme nur Zeichenmüll beim Modell an.
-   *  - Pro Datei und insgesamt gilt ein Zeichenlimit (siehe Konstanten).
-   *
-   * Hinweise für den Nutzer sammeln sich in `notices` und erscheinen gebündelt.
-   */
   const handleFileUpload = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) {
-      return;
-    }
+    if (!fileList || fileList.length === 0) return;
 
     const notices: string[] = [];
     const accepted: AttachedFile[] = [];
-
-    // Schon angehängte Zeichen zählen mit, damit das Gesamtlimit stimmt.
     let totalChars = attachedFiles.reduce(
       (total, file) => total + file.content.length,
       0
@@ -524,7 +367,6 @@ const shownError = errorMessage || error?.message || '';
       }
 
       let originalContent: string;
-
       try {
         originalContent = await file.text();
       } catch {
@@ -541,15 +383,12 @@ const shownError = errorMessage || error?.message || '';
 
       if (totalChars + content.length > TOTAL_FILE_MAX_CHARS) {
         notices.push(
-          `Die Dateien dürfen zusammen höchstens ` +
-            `${TOTAL_FILE_MAX_CHARS.toLocaleString('de-DE')} Zeichen enthalten ` +
-            `(${file.name} wurde nicht angehängt).`
+          `Die Dateien dürfen zusammen höchstens ${TOTAL_FILE_MAX_CHARS.toLocaleString('de-DE')} Zeichen enthalten (${file.name} wurde nicht angehängt).`
         );
         continue;
       }
 
       const truncated = originalContent.length > FILE_MAX_CHARS;
-
       if (truncated) {
         notices.push(
           `${file.name} wurde auf ${FILE_MAX_CHARS.toLocaleString('de-DE')} Zeichen begrenzt.`
@@ -563,41 +402,24 @@ const shownError = errorMessage || error?.message || '';
     if (accepted.length > 0) {
       setAttachedFiles((previousFiles) => [...previousFiles, ...accepted]);
     }
-
     setErrorMessage(notices.join(' '));
   };
 
-  /** Entfernt eine angehängte Datei wieder (vor dem Senden). */
   const removeFile = (index: number) => {
     setAttachedFiles((previousFiles) =>
       previousFiles.filter((_, fileIndex) => fileIndex !== index)
     );
   };
 
-  // ---------------------------------------------------------------------------
-  // Verbindungstest der API-Keys
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Ruft /api/health auf. Der Server prüft dort jeden eingetragenen Key und
-   * liefert zurück, welcher Key funktioniert und was der Anbieter sonst meldet.
-   *
-   * normal: nur Lese-Abfragen, kostenlos. Prüft, ob der Key GÜLTIG ist.
-   * deep:   zusätzlich eine winzige echte Anfrage bei OpenAI und Google. Nur so
-   *         sieht man, ob noch Guthaben/Kontingent da ist. Verbraucht minimal.
-   */
   const checkKeys = async (mode: 'normal' | 'deep') => {
     setCheckingMode(mode);
-
     try {
       const response = await fetch(
         mode === 'deep' ? '/api/health?deep=1' : '/api/health'
       );
-
       if (!response.ok) {
         throw new Error('Der Verbindungstest ist fehlgeschlagen.');
       }
-
       setKeyResults((await response.json()) as KeyCheckResult[]);
     } catch (checkError) {
       console.error('Verbindungstest fehlgeschlagen:', checkError);
@@ -607,49 +429,28 @@ const shownError = errorMessage || error?.message || '';
     }
   };
 
-  // Drag-and-drop: Die drei Handler sitzen am äußersten Element der Seite.
-
-  /** Datei wird über das Fenster gezogen: Overlay einblenden. */
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(true);
   };
 
-  /**
-   * Datei verlässt das Fenster: Overlay ausblenden.
-   * dragleave feuert auch, wenn die Maus nur auf ein Kind-Element wechselt.
-   * Das wird hier herausgefiltert, sonst flackerte das Overlay.
-   */
   const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-
     if (
       event.relatedTarget instanceof Node &&
       event.currentTarget.contains(event.relatedTarget)
     ) {
       return;
     }
-
     setIsDragging(false);
   };
 
-  /** Datei wird losgelassen: einlesen. */
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
-
     void handleFileUpload(event.dataTransfer.files);
   };
 
-  // ---------------------------------------------------------------------------
-  // Diktieren (Spracherkennung des Browsers)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Schaltet die Spracherkennung ein oder aus. Der erkannte Text wird an das
-   * Eingabefeld angehängt. Nicht jeder Browser unterstützt das (Chrome und Edge
-   * ja, Firefox nein), dann erscheint eine Meldung.
-   */
   const toggleSpeechRecognition = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -661,7 +462,6 @@ const shownError = errorMessage || error?.message || '';
       return;
     }
 
-    // Läuft sie schon, wird sie beendet.
     if (isListening) {
       recognitionRef.current?.stop();
       setIsListening(false);
@@ -669,30 +469,22 @@ const shownError = errorMessage || error?.message || '';
     }
 
     const recognition = new SpeechRecognition();
-
     recognition.lang = 'de-DE';
-    recognition.continuous = false; // nach einem Satz automatisch aufhören
-    recognition.interimResults = false; // nur das endgültige Ergebnis liefern
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
+    recognition.onstart = () => setIsListening(true);
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
     };
-
     recognition.onerror = () => {
       setIsListening(false);
       recognitionRef.current = null;
-
       setErrorMessage('Bei der Spracherkennung ist ein Fehler aufgetreten.');
     };
-
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-
       setInput((previousInput) =>
         previousInput ? `${previousInput} ${transcript}` : transcript
       );
@@ -702,38 +494,15 @@ const shownError = errorMessage || error?.message || '';
     recognition.start();
   };
 
-  // ---------------------------------------------------------------------------
-  // Senden
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Baut den Text, der an den Server geht: Eingabetext plus Dateiinhalte.
-   *
-   * Ergebnis mit Dateien (Beispiel):
-   *   Fasse das zusammen
-   *
-   *   [Angehängte Dateien]
-   *
-   *   --- Datei: a.txt ---
-   *   ...Inhalt...
-   *   --- Ende der Datei ---
-   *
-   * Der Marker "[Angehängte Dateien]" erkennt splitAttachments() später wieder,
-   * um die Dateien in der Anzeige als kleine Chips zu zeigen.
-   */
   const buildPrompt = () => {
     const currentInput = input.trim();
-
-    if (attachedFiles.length === 0) {
-      return currentInput;
-    }
+    if (attachedFiles.length === 0) return currentInput;
 
     const fileContext = attachedFiles
       .map((file) => {
         const truncatedNotice = file.truncated
           ? '\n[Hinweis: Diese Datei wurde gekürzt.]\n'
           : '';
-
         return (
           `\n--- Datei: ${file.name} ---\n` +
           `${truncatedNotice}` +
@@ -748,41 +517,27 @@ const shownError = errorMessage || error?.message || '';
       .join('\n\n');
   };
 
-  /**
-   * Wird beim Absenden des Formulars aufgerufen (Enter oder Senden-Button).
-   * Während einer laufenden Antwort und bei leerer Eingabe passiert nichts.
-   */
   const submitMessage = async (event: React.FormEvent<HTMLFormElement>) => {
-    // Verhindert, dass der Browser die Seite neu lädt (Standardverhalten von Formularen).
     event.preventDefault();
-
-    if (isLoading) {
-      return;
-    }
+    if (isLoading) return;
 
     const prompt = buildPrompt();
-
-    if (!prompt.trim()) {
-      return;
-    }
+    if (!prompt.trim()) return;
 
     setErrorMessage('');
     clearError();
     setInput('');
     setAttachedFiles([]);
 
-    // `body` wird zusätzlich zu den Nachrichten an /api/chat geschickt:
-    // Modell (welcher Anbieter?) und Chat-ID (wohin speichern?).
-    // Fehler landen im `error`-State von useChat und werden unten angezeigt.
     await sendMessage(
       { text: prompt },
       { body: { model: selectedModel, chatId } }
     );
   };
 
-  // ---------------------------------------------------------------------------
-  // Die sichtbare Oberfläche (JSX)
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // RENDER
+  // ===========================================================================
   return (
     // Äußerster Rahmen. Hier hängen die Drag-and-drop-Handler.
     <div
@@ -791,28 +546,58 @@ const shownError = errorMessage || error?.message || '';
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Overlay "Dateien hier ablegen", nur während des Ziehens sichtbar.
-          pointer-events-none: es fängt keine Mausereignisse ab, sonst würde
-          dragleave ständig feuern. */}
+      {/* Overlay "Dateien hier ablegen", nur während des Ziehens sichtbar. */}
       {isDragging && (
-        <div className="pointer-events-none absolute inset-0 z-50 m-4 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-500 bg-zinc-900/90 backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-0 z-[60] m-4 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-500 bg-zinc-900/90 backdrop-blur-sm">
           <Paperclip className="mb-2 h-12 w-12 animate-bounce text-zinc-400" />
-
           <p className="text-lg font-medium text-zinc-200">
             Dateien hier ablegen
           </p>
         </div>
       )}
 
-      {/* ------------------------- Seitenleiste ------------------------- */}
-      <aside className="flex w-72 shrink-0 flex-col justify-between border-r border-zinc-800 bg-zinc-900 p-4">
-        <div className="flex min-h-0 flex-col gap-4">
-          <div className="flex items-center gap-2 text-lg font-bold">
-            <Sparkles className="h-5 w-5 text-indigo-400" />
+      {/* ============================================================
+           1. RESPONSIVE SEITENLEISTE (Sidebar / Drawer)
+           - Desktop (≥1280px / xl): immer sichtbar, fest im Layout
+           - Tablet & Mobile (< 1280px): fixed Drawer, per Hamburger
+             ein-/ausklappbar, schließt bei Chat-Auswahl automatisch
+           ============================================================ */}
 
-            <span>AI Platform 2026</span>
+      {/* Backdrop: MUSS außerhalb der <aside> stehen. Ein transformiertes
+          Elternelement macht "fixed" sonst relativ zu sich selbst, und der
+          Backdrop würde nur die Sidebar statt den ganzen Bildschirm abdecken. */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm xl:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col justify-between border-r border-zinc-800 bg-zinc-900 p-4 transition-transform duration-300 ease-in-out xl:static xl:z-auto xl:translate-x-0 xl:shadow-none ${
+          isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}
+        aria-label="Chat-Verlauf und Einstellungen"
+      >
+        <div className="flex min-h-0 flex-col gap-4">
+          {/* Header: Logo + Schließen (nur < xl) */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-lg font-bold">
+              <Sparkles className="h-5 w-5 text-indigo-400" />
+              <span>AI Platform 2026</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
+              className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 xl:hidden"
+              aria-label="Seitenleiste schließen"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
+          {/* Neuer Chat */}
           <button
             type="button"
             onClick={createNewChat}
@@ -823,71 +608,69 @@ const shownError = errorMessage || error?.message || '';
           </button>
 
           {/* Modell-Filter + Dropdown */}
-<div className="mt-2 flex flex-col gap-2">
-  <div className="flex items-center justify-between">
-    <label
-      htmlFor="model-select"
-      className="text-xs font-semibold uppercase tracking-wider text-zinc-400"
-    >
-      Modell wählen
-    </label>
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="model-select"
+                className="text-xs font-semibold uppercase tracking-wider text-zinc-400"
+              >
+                Modell wählen
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextOnlyFree = !onlyFree;
+                  setOnlyFree(nextOnlyFree);
+                  if (nextOnlyFree) {
+                    const current = MODELS.find((m) => m.key === selectedModel);
+                    if (current && !current.isFree) {
+                      setSelectedModel(DEFAULT_MODEL);
+                    }
+                  }
+                }}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${
+                  onlyFree
+                    ? 'bg-emerald-900/60 text-emerald-300 ring-1 ring-emerald-700/50'
+                    : 'bg-amber-900/40 text-amber-300 ring-1 ring-amber-700/40'
+                }`}
+                title={
+                  onlyFree
+                    ? 'Nur Free-/Limit-Modelle'
+                    : 'Alle Modelle inkl. bezahlter'
+                }
+              >
+                {onlyFree ? '🆓 Free' : '💰 Alle'}
+              </button>
+            </div>
 
-    <button
-      type="button"
-      onClick={() => {
-        const nextOnlyFree = !onlyFree;
-        setOnlyFree(nextOnlyFree);
+            <select
+              id="model-select"
+              value={selectedModel}
+              onChange={(event) => {
+                setSelectedModel(event.target.value as ModelKey);
+                setErrorMessage('');
+                clearError();
+              }}
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-zinc-700"
+            >
+              {modelGroups.map(({ group, models }) => (
+                <optgroup key={group} label={group}>
+                  {models.map((model) => (
+                    <option key={model.key} value={model.key}>
+                      {model.isFree ? '🆓 ' : '💰 '}
+                      {model.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
 
-        if (nextOnlyFree) {
-          const current = MODELS.find((m) => m.key === selectedModel);
-          if (current && !current.isFree) {
-            setSelectedModel(DEFAULT_MODEL);
-          }
-        }
-      }}
-      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${
-        onlyFree
-          ? 'bg-emerald-900/60 text-emerald-300 ring-1 ring-emerald-700/50'
-          : 'bg-amber-900/40 text-amber-300 ring-1 ring-amber-700/40'
-      }`}
-      title={
-        onlyFree
-          ? 'Nur Free-/Limit-Modelle'
-          : 'Alle Modelle inkl. bezahlter'
-      }
-    >
-      {onlyFree ? '🆓 Free' : '💰 Alle'}
-    </button>
-  </div>
-
-  <select
-    id="model-select"
-    value={selectedModel}
-    onChange={(event) => {
-      setSelectedModel(event.target.value as ModelKey);
-      setErrorMessage('');
-      clearError();
-    }}
-    className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-zinc-700"
-  >
-    {modelGroups.map(({ group, models }) => (
-      <optgroup key={group} label={group}>
-        {models.map((model) => (
-          <option key={model.key} value={model.key}>
-            {model.isFree ? '🆓 ' : '💰 '}
-            {model.label}
-          </option>
-        ))}
-      </optgroup>
-    ))}
-  </select>
-
-  <p className="text-[10px] leading-tight text-zinc-500">
-    {onlyFree
-      ? 'Nur Modelle mit Free-Tier / Rate-Limits'
-      : 'Bezahlte Modelle (z. B. OpenAI) verbrauchen Guthaben'}
-  </p>
-</div>
+            <p className="text-[10px] leading-tight text-zinc-500">
+              {onlyFree
+                ? 'Nur Modelle mit Free-Tier / Rate-Limits'
+                : 'Bezahlte Modelle (z. B. OpenAI) verbrauchen Guthaben'}
+            </p>
+          </div>
 
           {/* Chatverlauf */}
           <div className="mt-4 flex min-h-0 flex-col gap-1 overflow-y-auto pr-1">
@@ -911,17 +694,17 @@ const shownError = errorMessage || error?.message || '';
                 >
                   <button
                     type="button"
-                    onClick={() => void loadChat(chat.id)}
+                    onClick={() => {
+                      void loadChat(chat.id);
+                    }}
                     className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
                   >
                     <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-
                     <span className="truncate">
                       {chat.title || 'Neuer Chat'}
                     </span>
                   </button>
 
-                  {/* Papierkorb: nur beim Darüberfahren oder per Tastatur sichtbar */}
                   <button
                     type="button"
                     onClick={(event) => void deleteChat(chat.id, event)}
@@ -961,7 +744,6 @@ const shownError = errorMessage || error?.message || '';
             </button>
           </div>
 
-          {/* Ergebnisliste: grün = Key gültig, rot = Fehler mit Meldung des Anbieters */}
           {keyResults && (
             <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1 text-[11px] leading-snug">
               {keyResults.map((result) => (
@@ -975,7 +757,9 @@ const shownError = errorMessage || error?.message || '';
                     <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
                   )}
 
-                  <span className={result.ok ? 'text-zinc-300' : 'text-zinc-400'}>
+                  <span
+                    className={result.ok ? 'text-zinc-300' : 'text-zinc-400'}
+                  >
                     <span className="font-medium text-zinc-200">
                       {result.provider}
                     </span>{' '}
@@ -998,7 +782,6 @@ const shownError = errorMessage || error?.message || '';
             <p className="text-[11px] leading-relaxed text-zinc-500">
               Aktives Modell:
             </p>
-
             <p className="truncate text-xs text-zinc-300">
               {selectedModelLabel}
             </p>
@@ -1006,15 +789,30 @@ const shownError = errorMessage || error?.message || '';
         </div>
       </aside>
 
-      {/* ------------------------- Hauptbereich ------------------------- */}
+      {/* ============================================================
+           2. HAUPTBEREICH (Chat + Eingabe)
+           ============================================================ */}
       <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-zinc-950">
-        {/* Nachrichtenliste */}
-        <div className="flex-1 space-y-6 overflow-y-auto p-6">
-          {messages.length === 0 ? (
-            // Leerer Zustand: Platzhalter
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-zinc-500">
-              <Bot className="h-12 w-12 text-zinc-700" />
+        {/* Hamburger-Button oben links (nur < xl) */}
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen(true)}
+          className="absolute left-3 top-3 z-20 rounded-lg bg-zinc-900/80 p-2 text-zinc-200 shadow-lg backdrop-blur-sm transition hover:bg-zinc-800 xl:hidden"
+          aria-label="Menü öffnen"
+          aria-expanded={isSidebarOpen}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
 
+        {/* ------------------------- CHAT-VERLAUF ------------------------- */}
+        <div className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6 lg:p-8">
+          {/* Platzhalter, damit der Hamburger-Button keine Nachricht überdeckt */}
+          <div className="h-8 shrink-0 xl:hidden" aria-hidden="true" />
+
+          {messages.length === 0 ? (
+            // Leerer Zustand
+            <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-3 text-center text-zinc-500">
+              <Bot className="h-12 w-12 text-zinc-700" />
               <p className="max-w-sm text-sm">
                 Starte ein Gespräch, erstelle ein Bild oder ziehe Dokumente
                 hinein.
@@ -1025,21 +823,18 @@ const shownError = errorMessage || error?.message || '';
               const rawText = getMessageText(message);
               const isUser = message.role === 'user';
 
-              // Nutzer: Text und Dateinamen trennen, damit Dateiinhalte nicht
-              // als riesiger Block erscheinen.
+              // Nutzer: Text und Dateinamen trennen
               const { text: userText, fileNames } = isUser
                 ? splitAttachments(rawText)
                 : { text: '', fileNames: [] as string[] };
 
-              // Antwort: enthält sie ein Pollinations-Bild, URL herausholen und
-              // das Markdown aus dem sichtbaren Text entfernen.
+              // Antwort: Bild-URL extrahieren & Markdown entfernen
               const imageUrl = isUser ? null : getImageUrl(rawText);
               const displayText = isUser
                 ? userText
                 : rawText.replace(IMAGE_MARKDOWN, '').trim();
 
-              // Leere Blasen vermeiden, z. B. solange nur Denkschritte des
-              // Modells gestreamt werden und noch kein Text da ist.
+              // Leere Blasen vermeiden (z. B. Reasoning-Schritte ohne Text)
               if (!displayText && !imageUrl && fileNames.length === 0) {
                 return null;
               }
@@ -1047,7 +842,7 @@ const shownError = errorMessage || error?.message || '';
               return (
                 <div
                   key={message.id}
-                  className={`mx-auto flex max-w-4xl gap-4 ${
+                  className={`mx-auto flex max-w-3xl gap-4 ${
                     isUser ? 'justify-end' : 'justify-start'
                   }`}
                 >
@@ -1058,7 +853,7 @@ const shownError = errorMessage || error?.message || '';
                   )}
 
                   <div
-                    className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                    className={`max-w-[90%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-relaxed md:max-w-[85%] ${
                       isUser
                         ? 'rounded-br-none bg-indigo-600 text-white'
                         : 'rounded-bl-none border border-zinc-800 bg-zinc-900 text-zinc-200'
@@ -1066,7 +861,7 @@ const shownError = errorMessage || error?.message || '';
                   >
                     {displayText}
 
-                    {/* Angehängte Dateien als kleine Chips */}
+                    {/* Angehängte Dateien als Chips */}
                     {fileNames.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {fileNames.map((name, index) => (
@@ -1081,13 +876,12 @@ const shownError = errorMessage || error?.message || '';
                       </div>
                     )}
 
-                    {/* Erzeugtes Bild (mit automatischer Wiederholung) */}
+                    {/* Generiertes Bild (mit Auto-Retry) */}
                     {imageUrl && (
                       <div className="mt-3 space-y-2">
                         <p className="text-xs text-zinc-400">
                           Generiertes Bild:
                         </p>
-
                         <GeneratedImage url={imageUrl} />
                       </div>
                     )}
@@ -1103,37 +897,33 @@ const shownError = errorMessage || error?.message || '';
             })
           )}
 
-          {/* "Antwort wird generiert ..." zwischen Senden und erstem Text */}
+          {/* "Antwort wird generiert …" */}
           {status === 'submitted' && (
-            <div className="mx-auto flex max-w-4xl items-center gap-4">
+            <div className="mx-auto flex max-w-3xl items-center gap-4">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-600/20">
                 <Bot className="h-4 w-4 text-indigo-400" />
               </div>
-
               <div className="animate-pulse text-xs text-zinc-500">
                 Antwort wird generiert...
               </div>
             </div>
           )}
 
-          {/* Fehlermeldung: eigene Meldung oder Fehler des Anbieters */}
+          {/* Fehlermeldung */}
           {shownError && (
-            <div className="mx-auto max-w-4xl rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+            <div className="mx-auto max-w-3xl rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
               {shownError}
             </div>
           )}
 
-          {/* Unsichtbarer Anker, zu dem automatisch gescrollt wird */}
+          {/* Scroll-Anker */}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Eingabebereich */}
-        <div className="border-t border-zinc-800 bg-zinc-950/80 p-4 backdrop-blur-md">
-          <form
-            onSubmit={submitMessage}
-            className="mx-auto max-w-4xl space-y-2"
-          >
-            {/* Angehängte Dateien vor dem Senden, einzeln entfernbar */}
+        {/* ------------------------- EINGABEBEREICH ------------------------- */}
+        <div className="border-t border-zinc-800 bg-zinc-950/80 p-4 backdrop-blur-md md:p-6">
+          <form onSubmit={submitMessage} className="mx-auto max-w-3xl space-y-2">
+            {/* Angehängte Dateien (entfernbar) */}
             {attachedFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachedFiles.map((file, index) => (
@@ -1142,13 +932,10 @@ const shownError = errorMessage || error?.message || '';
                     className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300"
                   >
                     <FileText className="h-3.5 w-3.5 text-indigo-400" />
-
                     <span className="max-w-[180px] truncate">{file.name}</span>
-
                     {file.truncated && (
                       <span className="text-yellow-500">gekürzt</span>
                     )}
-
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
@@ -1164,9 +951,7 @@ const shownError = errorMessage || error?.message || '';
             )}
 
             <div className="relative flex items-center">
-              {/* Verstecktes Datei-Eingabefeld, das der Büroklammer-Button öffnet.
-                  Danach wird der Wert geleert, damit dieselbe Datei erneut
-                  gewählt werden kann. */}
+              {/* Verstecktes File-Input */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1178,7 +963,7 @@ const shownError = errorMessage || error?.message || '';
                 }}
               />
 
-              {/* Buttons links im Eingabefeld: Datei anhängen und Diktieren */}
+              {/* Buttons links: Datei + Diktieren */}
               <div className="absolute left-3 flex items-center gap-1">
                 <button
                   type="button"
@@ -1209,7 +994,7 @@ const shownError = errorMessage || error?.message || '';
                 </button>
               </div>
 
-              {/* Texteingabe. Der Platzhalter passt sich Modell und Diktiermodus an. */}
+              {/* Texteingabe */}
               <input
                 type="text"
                 value={input}
@@ -1228,7 +1013,7 @@ const shownError = errorMessage || error?.message || '';
                 }`}
               />
 
-              {/* Rechts: während der Antwort "Stopp", sonst "Senden" */}
+              {/* Rechts: Stopp oder Senden */}
               {isLoading ? (
                 <button
                   type="button"
@@ -1254,6 +1039,167 @@ const shownError = errorMessage || error?.message || '';
           </form>
         </div>
       </main>
+
+      {/* ============================================================
+           3. KI-AGENT PANEL (vorbereitet für spätere Autonomie)
+           ============================================================ */}
+
+      {/* Floating Action Button (FAB).
+          bottom-28 statt bottom-6, damit er nicht den Senden-Button
+          im Eingabefeld überdeckt (vorher auf Tablets/Mobile der Fall). */}
+      <button
+        type="button"
+        onClick={() => setIsAgentOpen((open) => !open)}
+        className="fixed bottom-28 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/30 transition hover:scale-105 hover:shadow-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-950 md:right-6"
+        aria-label={isAgentOpen ? 'Agent-Panel schließen' : 'Agent-Panel öffnen'}
+        aria-expanded={isAgentOpen}
+        title="KI-Agent"
+      >
+        {isAgentOpen ? (
+          <X className="h-6 w-6" />
+        ) : (
+          <Sparkles className="h-6 w-6 animate-pulse" />
+        )}
+      </button>
+
+      {/* Agent Panel */}
+      {isAgentOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => setIsAgentOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Panel (Breite begrenzt, damit es auf kleinen Screens nicht links herausragt) */}
+          <div className="fixed bottom-44 right-4 z-50 w-[calc(100vw-2rem)] max-w-sm md:right-6 md:max-w-md lg:max-w-lg">
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-2 w-2 animate-pulse rounded-full bg-violet-500" />
+                  <span className="text-sm font-semibold text-white">
+                    Autonomous Agent
+                  </span>
+                  <span className="rounded-full bg-violet-500/20 px-2 py-0.5 font-mono text-xs text-violet-300">
+                    v0.1.0-alpha
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAgentOpen(false)}
+                  className="rounded-lg p-1 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+                  aria-label="Panel schließen"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Tab-Navigation */}
+              <div className="flex border-b border-zinc-800 bg-zinc-900/50">
+                {[
+                  { id: 'logs', label: 'Logs', icon: Terminal },
+                  { id: 'tools', label: 'Tools', icon: Cpu },
+                ].map((tab) => (
+                  <button
+                    type="button"
+                    key={tab.id}
+                    onClick={() => setAgentTab(tab.id as 'logs' | 'tools')}
+                    className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition ${
+                      agentTab === tab.id
+                        ? 'border-b-2 border-violet-500 bg-zinc-950 text-violet-400'
+                        : 'text-zinc-500 hover:text-zinc-200'
+                    }`}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab-Inhalt */}
+              <div className="max-h-[50vh] flex-1 space-y-3 overflow-y-auto p-4">
+                {agentTab === 'logs' ? (
+                  <div className="space-y-2 font-mono text-xs text-zinc-300">
+                    <div className="rounded border border-zinc-800/50 bg-zinc-900/50 p-2">
+                      <span className="text-zinc-500">[System]</span> Agent
+                      initialisiert. Warte auf Trigger...
+                    </div>
+                    <div className="rounded border border-zinc-800/50 bg-zinc-900/50 p-2">
+                      <span className="text-emerald-500">[Ready]</span> Tools
+                      geladen: WebSearch, CodeExec, FileRead.
+                    </div>
+                    <div className="rounded border border-zinc-800/50 bg-zinc-900/50 p-2 opacity-50">
+                      <span className="text-zinc-500">[Info]</span> Keine
+                      aktiven Tasks. Sende einen Befehl im Chat oder nutze
+                      <code className="ml-1 text-violet-400">/agent run</code>{' '}
+                      oder wähle ein Tool oben.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-xs text-zinc-300">
+                    <div className="rounded border border-zinc-800/50 bg-zinc-900/50 p-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Cpu className="h-4 w-4 text-violet-400" />
+                        <span className="font-semibold text-white">
+                          Verfügbare Tools
+                        </span>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {[
+                          {
+                            name: 'WebSearch',
+                            desc: 'Live-Suche im Internet',
+                            icon: '🌐',
+                            disabled: false,
+                          },
+                          {
+                            name: 'CodeExec',
+                            desc: 'Python/JS Sandbox',
+                            icon: '⚙️',
+                            disabled: false,
+                          },
+                          {
+                            name: 'FileRead',
+                            desc: 'Dateien lesen & analysieren',
+                            icon: '📄',
+                            disabled: false,
+                          },
+                          {
+                            name: 'Shell',
+                            desc: 'Befehle ausführen (geplant)',
+                            icon: '💻',
+                            disabled: true,
+                          },
+                        ].map((tool) => (
+                          <li
+                            key={tool.name}
+                            className="flex items-center gap-2 rounded border border-zinc-800/50 bg-zinc-900/50 px-2 py-1.5"
+                          >
+                            <span className="text-lg">{tool.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium">{tool.name}</p>
+                              <p className="truncate text-[10px] text-zinc-500">
+                                {tool.desc}
+                              </p>
+                            </div>
+                            {tool.disabled && (
+                              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                                Bald
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

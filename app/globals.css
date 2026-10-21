@@ -24,3 +24,57 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* ==========================================================================
+   AGENT PANEL & TABLET OPTIMIERUNG (600px - 1200px)
+   ========================================================================== */
+
+/* Weiche Scrollbars für Tablets */
+@media (min-width: 600px) and (max-width: 1200px) {
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}
+
+/* Floating Agent Button (FAB) */
+.agent-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s ease-in-out;
+}
+
+.agent-fab:hover {
+  transform: scale(1.08);
+}
+
+/* Agent Drawer/Fenster */
+.agent-panel {
+  position: fixed;
+  bottom: 85px;
+  right: 24px;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  height: 500px;
+  max-height: 70vh;
+  background: #18181b; /* zinc-900 */
+  border: 1px solid #27272a; /* zinc-800 */
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
