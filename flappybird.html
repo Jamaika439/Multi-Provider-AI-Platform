@@ -330,8 +330,33 @@ function draw(){
   const ctx=S.ctx; ctx.clearRect(0,0,S.w,S.h);
   // Background grid
   drawGrid(ctx);
+  // Screen shake transform
+  if(S.screenShake > 0){
+    const shakeX = (Math.random()-0.5) * S.screenShake * 20;
+    const shakeY = (Math.random()-0.5) * S.screenShake * 20;
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+  }
   if(S.mode==='normal') drawNormal(ctx);
   else drawHardcore(ctx);
+  // Pipe pass particles (on top of everything, no shake)
+  if(S.screenShake > 0) ctx.restore();
+  for(const p of S.pipePassParticles){
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation);
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color; ctx.shadowBlur = 15 * p.alpha;
+    ctx.beginPath();
+    // Star shape
+    const spikes=5, outer=p.size, inner=p.size*0.4;
+    for(let i=0;i<spikes*2;i++){
+      const r = i%2===0 ? outer : inner;
+      const ang = (i/spikes/2) * Math.PI * 2;
+      ctx.lineTo(Math.cos(ang)*r, Math.sin(ang)*r);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
   // Particles on top
   for(const pt of S.particles){ctx.globalAlpha=pt.alpha;ctx.fillStyle=pt.color;ctx.beginPath();ctx.arc(pt.x,pt.y,pt.size,0,Math.PI*2);ctx.fill();} ctx.globalAlpha=1;
 }
