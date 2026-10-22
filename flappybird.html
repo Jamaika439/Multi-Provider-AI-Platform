@@ -306,13 +306,14 @@ function updateNormal(dt){
     // Collision
     const px=S.player.x, py=S.player.y, pr=S.player.r;
     if(px+pr>pipe.x && px-pr<pipe.x+CFG.pipeWidth){
-      if(py-pr<pipe.top || py+pr>pipe.top+pipe.gap){ gameOver(); return; }
+      if(py-pr<pipe.top || py+pr>pipe.top+pipe.gap){ triggerFreeze(); gameOver(); return; }
     }
     if(!pipe.passed && pipe.x+CFG.pipeWidth<px){
       pipe.passed=true; S.score++; updateHUD();
-      // SWAG: Screen shake + burst particles on pipe pass
+      // SWAG: Screen shake + burst particles on pipe pass + FREEZE FRAME
       S.screenShake = 0.15;
       spawnPipePassParticles(pipe.x + CFG.pipeWidth/2, pipe.top + pipe.gap/2);
+      triggerFreeze(0.08); // Micro-freeze on pipe pass
     }
     if(pipe.x+CFG.pipeWidth<0) S.pipes.splice(i,1);
   }
