@@ -360,7 +360,34 @@ function draw(){
   // Particles on top
   for(const pt of S.particles){ctx.globalAlpha=pt.alpha;ctx.fillStyle=pt.color;ctx.beginPath();ctx.arc(pt.x,pt.y,pt.size,0,Math.PI*2);ctx.fill();} ctx.globalAlpha=1;
 }
-function drawGrid(ctx){ctx.strokeStyle='rgba(0,255,200,0.03)';ctx.lineWidth=1;const step=50;for(let x=0;x<S.w;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,S.h);ctx.stroke();}for(let y=0;y<S.h;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(S.w,y);ctx.stroke();}}
+function drawGrid(ctx){
+  const time = performance.now() / 1000;
+  // Main grid - subtle
+  ctx.strokeStyle='rgba(0,255,200,0.03)';
+  ctx.lineWidth=1;
+  const step=50;
+  for(let x=0;x<S.w;x+=step){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,S.h);ctx.stroke();
+  }
+  for(let y=0;y<S.h;y+=step){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(S.w,y);ctx.stroke();
+  }
+  // Accent lines - animated
+  ctx.strokeStyle=`rgba(0,255,200,${0.02 + Math.sin(time)*0.01})`;
+  ctx.lineWidth=2;
+  const offset = (time * 30) % 100;
+  for(let x=-100+offset;x<S.w+100;x+=100){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,S.h);ctx.stroke();
+  }
+  // Horizon glow line
+  const horizonY = S.h * 0.5 + Math.sin(time * 0.5) * 20;
+  const hGrad = ctx.createLinearGradient(0, horizonY-2, 0, horizonY+2);
+  hGrad.addColorStop(0, 'transparent');
+  hGrad.addColorStop(0.5, 'rgba(0,255,200,0.15)');
+  hGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = hGrad;
+  ctx.fillRect(0, horizonY-2, S.w, 4);
+}
 function drawNormal(ctx){
   // SWAG PIPES - Cyberpunk Neon Style
   const time = performance.now() / 1000;
