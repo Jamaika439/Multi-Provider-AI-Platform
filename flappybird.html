@@ -226,11 +226,14 @@ function startGame(mode){ S.mode=mode; hideAllScreens(); if(mode==='hardcore') h
    ================================================================ */
 function resetGame(){
   S.score=0; S.wave=1; S.waveTimer=0; S.over=false; S.won=false;
-  S.player={x:S.w*0.2, y:S.h*0.5, r:14, vy:0, hp:3, maxHp:3, inv:0, color:'#00ffc8'};
+  S.player={x:S.w*0.2, y:S.h*0.5, r:16, vy:0, hp:3, maxHp:3, inv:0, color:'#ffd700', wingPhase: 0};
   S.pipes=[]; S.bullets=[]; S.enemies=[]; S.powerUps=[]; S.particles=[];
   S.weapon='pulse'; S.mult=1; S.fireRate=CFG.fireRateBase; S.dmgMult=1;
   S.lastShot=0; S.autoFire=true; S.spawnPipe=0; S.spawnEnemy=0;
   S.screenShake=0; S.pipePassParticles=[];
+  S.freezeTimer=0; S.freezeActive=false;
+  // Background offsets reset
+  S.bgOffset=0; S.cloudOffset=0; S.cityOffset=0; S.groundOffset=0;
   updateHUD();
 }
 
