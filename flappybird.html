@@ -261,6 +261,19 @@ function updateHUD(){ $('hudScore').textContent=S.score; $('hudWave').textConten
    ================================================================ */
 function loop(ts){
   if(!S.running) return;
+  // Handle freeze frame
+  if(S.freezeActive){
+    S.freezeTimer -= (ts - S.last) / 1000;
+    if(S.freezeTimer <= 0){
+      S.freezeActive = false;
+      if(S.over) return; // Game over, stop loop
+    }
+    // Still draw during freeze
+    draw();
+    S.last = ts;
+    requestAnimationFrame(loop);
+    return;
+  }
   const dt=Math.min((ts-S.last)/1000,0.05); S.last=ts;
   update(dt); draw(); requestAnimationFrame(loop);
 }
