@@ -307,6 +307,21 @@ function winGame(){ S.won=true; S.over=true; showOver(true); }
    ================================================================ */
 function spawnHitParticles(x,y,col){for(let i=0;i<8;i++){const a=rand(0,Math.PI*2),s=rand(60,180);S.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.4,maxLife:0.4,alpha:1,color:col,size:rand(2,4)});}}
 function spawnExplosion(x,y,col){for(let i=0;i<20;i++){const a=rand(0,Math.PI*2),s=rand(80,250);S.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(0.5,1),maxLife:1,alpha:1,color:col,size:rand(3,6)});}}
+function spawnPipePassParticles(cx,cy){
+  const colors=['#00ffc8','#6366f1','#ff6b35','#facc15','#a855f7'];
+  for(let i=0;i<18;i++){
+    const a=rand(0,Math.PI*2), s=rand(120,300);
+    S.pipePassParticles.push({
+      x:cx, y:cy,
+      vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+      life:rand(0.6,1.2), maxLife:1.2, alpha:1,
+      color:colors[rand(0,colors.length)|0],
+      size:rand(3,7),
+      rotation:rand(0,Math.PI*2),
+      rotSpeed:rand(-8,8)
+    });
+  }
+}
 
 /* ================================================================
    RENDER
