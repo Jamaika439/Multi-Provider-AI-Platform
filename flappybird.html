@@ -234,8 +234,21 @@ function updateNormal(dt){
     if(px+pr>pipe.x && px-pr<pipe.x+CFG.pipeWidth){
       if(py-pr<pipe.top || py+pr>pipe.top+pipe.gap){ gameOver(); return; }
     }
-    if(!pipe.passed && pipe.x+CFG.pipeWidth<px){pipe.passed=true;S.score++;updateHUD();}
+    if(!pipe.passed && pipe.x+CFG.pipeWidth<px){
+      pipe.passed=true; S.score++; updateHUD();
+      // SWAG: Screen shake + burst particles on pipe pass
+      S.screenShake = 0.15;
+      spawnPipePassParticles(pipe.x + CFG.pipeWidth/2, pipe.top + pipe.gap/2);
+    }
     if(pipe.x+CFG.pipeWidth<0) S.pipes.splice(i,1);
+  }
+  // Screen shake decay
+  if(S.screenShake > 0) S.screenShake = Math.max(0, S.screenShake - dt*3);
+  // Pipe pass particles update
+  for(let i=S.pipePassParticles.length-1;i>=0;i--){
+    const p=S.pipePassParticles[i];
+    p.x+=p.vx*dt*60; p.y+=p.vy*dt*60; p.life-=dt; p.alpha=p.life/p.maxLife; p.size*=0.98;
+    if(p.life<=0) S.pipePassParticles.splice(i,1);
   }
 }
 function updateHardcore(dt){
