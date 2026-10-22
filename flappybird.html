@@ -280,6 +280,13 @@ function loop(ts){
 function update(dt){
   if(S.over) return;
   const p=S.player;
+  // Update wing animation
+  p.wingPhase += dt * 15;
+  // Background scroll
+  S.bgOffset += dt * CFG.bgScrollSpeed * 60;
+  S.cloudOffset += dt * CFG.cloudScrollSpeed * 60;
+  S.cityOffset += dt * CFG.cityScrollSpeed * 60;
+  S.groundOffset += dt * CFG.groundScrollSpeed * 60;
   // Player Physics
   p.vy += (S.mode==='normal'?CFG.gravityN:CFG.gravityH)*60*dt;
   p.y += p.vy*60*dt;
