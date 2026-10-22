@@ -165,6 +165,46 @@ function resize(){
   S.cvs.width = S.w * S.dpr; S.cvs.height = S.h * S.dpr;
   S.cvs.style.width = S.w+'px'; S.cvs.style.height = S.h+'px';
   S.ctx.setTransform(S.dpr,0,0,S.dpr,0,0);
+  // Init background elements on resize
+  initBackground();
+}
+function initBackground(){
+  // Clouds
+  S.clouds = [];
+  for(let i=0;i<6;i++){
+    S.clouds.push({
+      x: rand(0, S.w),
+      y: rand(40, S.h * 0.5),
+      scale: rand(0.6, 1.4),
+      speed: rand(0.2, 0.5),
+      opacity: rand(0.3, 0.7),
+      parts: Array.from({length: rand(3,6)}, ()=>({dx: rand(-20,20), dy: rand(-10,10), r: rand(15,35)}))
+    });
+  }
+  // City silhouette layers (parallax)
+  S.cityLayers = [];
+  for(let layer=0; layer<3; layer++){
+    const buildings = [];
+    let bx = 0;
+    while(bx < S.w * 2){
+      const bw = rand(40, 120);
+      const bh = rand(60, 200);
+      buildings.push({x: bx, w: bw, h: bh, windows: []});
+      // Windows
+      for(let wx=0; wx<bw; wx+=rand(12,20)){
+        for(let wy=0; wy<bh; wy+=rand(15,25)){
+          if(rand()<0.3) buildings[buildings.length-1].windows.push({x: wx, y: wy, lit: rand()<0.6});
+        }
+      }
+      bx += bw + rand(5, 20);
+    }
+    S.cityLayers.push({
+      buildings,
+      speed: CFG.cityScrollSpeed * (0.5 + layer * 0.3),
+      color: `hsl(220, 30%, ${10 + layer * 8}%)`,
+      windowColor: layer===0 ? '#ffd700' : layer===1 ? '#fff8e7' : '#e0e0ff'
+    });
+  }
 }
 window.addEventListener('resize',resize);
 
