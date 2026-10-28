@@ -25,7 +25,8 @@
     "remark-gfm": "^4.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "sql.js": "^1.14.2"
+    "sql.js": "^1.14.2",
+    "shiki": "^8.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
