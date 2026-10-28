@@ -16,6 +16,7 @@ import {
   Bot,
   CheckCircle2,
   Cpu,
+  Edit2,
   FileText,
   Menu,
   MessageSquare,
@@ -38,6 +39,7 @@ import {
   getMessageText,
   splitAttachments,
 } from '@/lib/messages';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import {
   DEFAULT_MODEL,
   IMAGE_MODEL,
@@ -245,6 +247,12 @@ export default function Home() {
   const [checkingMode, setCheckingMode] = useState<'normal' | 'deep' | null>(
     null
   );
+
+  // Bearbeitungs-Modus: { messageId, originalText } oder null
+  const [editing, setEditing] = useState<{
+    messageId: string;
+    originalText: string;
+  } | null>(null);
 
   // Responsive Drawer-State (600px - 1200px)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -911,6 +919,24 @@ export default function Home() {
                         : 'rounded-bl-none border border-zinc-800 bg-zinc-900 text-zinc-200'
                     }`}
                   >
+                    {isUser ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="flex-1 whitespace-pre-wrap break-words">
+                          {displayText}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleEditMessage(message.id, displayText)}
+                          className="shrink-0 rounded p-1 text-zinc-400 transition hover:bg-indigo-700 hover:text-white"
+                          title="Nachricht bearbeiten"
+                          aria-label="Nachricht bearbeiten"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <MarkdownRenderer content={displayText} />
+                    )}
                     {/* Agent-Werkzeugaufrufe */}
                     {toolParts.length > 0 && (
                       <div className="mb-2 space-y-1 font-mono text-[11px]">
