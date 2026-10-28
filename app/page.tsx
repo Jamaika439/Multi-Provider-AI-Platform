@@ -209,6 +209,12 @@ export default function Home() {
     null
   );
 
+  // Bearbeitungs-Modus: { messageId, originalText } oder null
+  const [editing, setEditing] = useState<{
+    messageId: string;
+    originalText: string;
+  } | null>(null);
+
   // Responsive Drawer-State (600px - 1200px)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
