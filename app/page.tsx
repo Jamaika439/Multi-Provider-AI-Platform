@@ -38,6 +38,7 @@ import {
   getMessageText,
   splitAttachments,
 } from '@/lib/messages';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import {
   DEFAULT_MODEL,
   IMAGE_MODEL,
