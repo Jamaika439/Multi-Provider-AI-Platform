@@ -16,6 +16,7 @@ import {
   Bot,
   CheckCircle2,
   Cpu,
+  Edit2,
   FileText,
   Menu,
   MessageSquare,
