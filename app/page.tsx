@@ -134,6 +134,44 @@ function getImageUrl(text: string): string | null {
   return text.match(IMAGE_MARKDOWN)?.[1] ?? null;
 }
 
+// Agent-Werkzeugaufrufe (AI SDK v5: Part-Typ "tool-<name>") für die Anzeige
+interface ToolPartInfo {
+  key: string;
+  name: string;
+  detail: string;
+  status: 'running' | 'done' | 'failed';
+}
+
+function getToolParts(message: UIMessage): ToolPartInfo[] {
+  const parts = (message.parts ?? []) as unknown as Array<
+    Record<string, unknown>
+  >;
+
+  return parts
+    .filter((p) => typeof p.type === 'string' && p.type.startsWith('tool-'))
+    .map((p, index) => {
+      const input = (p.input ?? {}) as Record<string, unknown>;
+      const output = p.output as Record<string, unknown> | undefined;
+      const detail =
+        typeof input.path === 'string'
+          ? input.path
+          : typeof input.query === 'string'
+            ? input.query
+            : typeof input.prefix === 'string'
+              ? input.prefix
+              : '';
+      const failed = p.state === 'output-error' || output?.ok === false;
+      const done = p.state === 'output-available';
+
+      return {
+        key: String(p.toolCallId ?? index),
+        name: String(p.type).slice(5),
+        detail,
+        status: failed ? 'failed' : done ? 'done' : 'running',
+      } satisfies ToolPartInfo;
+    });
+}
+
 // =============================================================================
 // 3. GeneratedImage
 // =============================================================================
@@ -222,6 +260,7 @@ export default function Home() {
   // KI-Agent State
   const [isAgentOpen, setIsAgentOpen] = useState(false);
   const [agentTab, setAgentTab] = useState<'logs' | 'tools'>('logs');
+  const [isAgentMode, setIsAgentMode] = useState(false);
 
   const isCheckingKeys = checkingMode !== null;
 
@@ -539,7 +578,13 @@ export default function Home() {
 
     await sendMessage(
       { text: prompt },
-      { body: { model: selectedModel, chatId } }
+      {
+        body: {
+          model: selectedModel,
+          chatId,
+          agent: isAgentMode && !isImageModel,
+        },
+      }
     );
   };
 
@@ -842,8 +887,15 @@ export default function Home() {
                 ? userText
                 : rawText.replace(IMAGE_MARKDOWN, '').trim();
 
+              const toolParts = isUser ? [] : getToolParts(message);
+
               // Leere Blasen vermeiden (z. B. Reasoning-Schritte ohne Text)
-              if (!displayText && !imageUrl && fileNames.length === 0) {
+              if (
+                !displayText &&
+                !imageUrl &&
+                fileNames.length === 0 &&
+                toolParts.length === 0
+              ) {
                 return null;
               }
 
@@ -885,6 +937,40 @@ export default function Home() {
                     ) : (
                       <MarkdownRenderer content={displayText} />
                     )}
+                    {/* Agent-Werkzeugaufrufe */}
+                    {toolParts.length > 0 && (
+                      <div className="mb-2 space-y-1 font-mono text-[11px]">
+                        {toolParts.map((tool) => (
+                          <div
+                            key={tool.key}
+                            className="flex items-center gap-2 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-violet-200"
+                          >
+                            <Cpu className="h-3 w-3 shrink-0" />
+                            <span className="font-semibold">{tool.name}</span>
+                            <span className="min-w-0 flex-1 truncate text-zinc-400">
+                              {tool.detail}
+                            </span>
+                            <span
+                              className={
+                                tool.status === 'done'
+                                  ? 'text-emerald-400'
+                                  : tool.status === 'failed'
+                                    ? 'text-red-400'
+                                    : 'animate-pulse text-amber-300'
+                              }
+                            >
+                              {tool.status === 'done'
+                                ? 'ok'
+                                : tool.status === 'failed'
+                                  ? 'Fehler'
+                                  : '…'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {displayText}
 
                     {/* Angehängte Dateien als Chips */}
                     {fileNames.length > 0 && (
@@ -1029,7 +1115,9 @@ export default function Home() {
                     ? 'Höre zu... Sprich jetzt...'
                     : isImageModel
                       ? 'Beschreibe das Bild...'
-                      : 'Frage stellen, Datei reinziehen oder diktieren...'
+                      : isAgentMode
+                        ? 'Agent-Aufgabe, z. B. „Fixe den Fehler in lib/db.ts“...'
+                        : 'Frage stellen, Datei reinziehen oder diktieren...'
                 }
                 className={`w-full rounded-xl border bg-zinc-900 py-3 pl-20 pr-12 text-sm text-zinc-100 outline-none transition ${
                   isListening
@@ -1141,6 +1229,36 @@ export default function Home() {
                     {tab.label}
                   </button>
                 ))}
+              </div>
+
+              {/* Agent-Modus Schalter */}
+              <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white">Agent-Modus</p>
+                  <p className="text-[11px] text-zinc-500">
+                    Liest/ändert das Repo über GitHub (Branch agent-work)
+                  </p>
+                  {isImageModel && (
+                    <p className="text-[11px] text-amber-300">
+                      Beim Bildmodell nicht verfügbar.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isAgentMode}
+                  onClick={() => setIsAgentMode((value) => !value)}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                    isAgentMode ? 'bg-violet-600' : 'bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                      isAgentMode ? 'left-[22px]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* Tab-Inhalt */}
