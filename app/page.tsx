@@ -860,7 +860,24 @@ export default function Home() {
                         : 'rounded-bl-none border border-zinc-800 bg-zinc-900 text-zinc-200'
                     }`}
                   >
-                    {displayText}
+                    {isUser ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="flex-1 whitespace-pre-wrap break-words">
+                          {displayText}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleEditMessage(message.id, displayText)}
+                          className="shrink-0 rounded p-1 text-zinc-400 transition hover:bg-indigo-700 hover:text-white"
+                          title="Nachricht bearbeiten"
+                          aria-label="Nachricht bearbeiten"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <MarkdownRenderer content={displayText} />
+                    )}
 
                     {/* Angehängte Dateien als Chips */}
                     {fileNames.length > 0 && (
