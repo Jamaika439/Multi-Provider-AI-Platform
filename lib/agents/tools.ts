@@ -200,6 +200,33 @@ export const agentTools = {
       return (json.items ?? []).slice(0, 20).map((i: { path: string }) => i.path);
     },
   }),
+
+  publish: tool({
+    description:
+      'Merged den Agent-Branch (agent-work) per GitHub API (POST /merges) nach main. DARF NUR AUSGEFÜHRT WERDEN, WENN DER NUTZER AUSDRÜCKLICH "live stellen" SAGT.',
+    inputSchema: z.object({
+      confirm: z
+        .literal('live stellen')
+        .describe('Bestätigung: Muss exakt "live stellen" sein, damit der Merge ausgeführt wird.'),
+    }),
+    execute: async ({ confirm }) => {
+      if (confirm !== 'live stellen') {
+        return {
+          ok: false,
+          error: 'Abbruch: Der Nutzer hat nicht "live stellen" gesagt. Merge wird nicht ausgeführt.',
+        };
+      }
+      const result = await gh('/merges', {
+        method: 'POST',
+        body: JSON.stringify({
+          base: BASE_BRANCH,
+          head: AGENT_BRANCH,
+          commit_message: 'Merge agent-work into main via agent publish',
+        }),
+      });
+      return { ok: true, sha: result.sha, html_url: result.html_url };
+    },
+  }),
 };
 
 export const AGENT_SYSTEM = `Du bist ein Senior Software Engineer im Repository-Agent-Modus.
