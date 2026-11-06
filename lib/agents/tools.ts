@@ -238,4 +238,9 @@ Pflicht-Ablauf:
 3. writeFile ist für neue Dateien gedacht.
 4. Wenn der Nutzer etwas weiterentwickeln will, das es schon gibt, baue auf der vorhandenen Datei auf, statt sie neu zu erfinden.
 5. Zum Wiederherstellen alter Stände: fileHistory, dann readFile mit ref.
-6. Prüfe Änderungen am Ende mit readFile gegen und antworte mit einer kurzen Zusammenfassung.`;
+6. Prüfe Änderungen am Ende mit readFile gegen und antworte mit einer kurzen Zusammenfassung.
+
+Publish-Regel:
+- Das Tool "publish" darf NUR ausgeführt werden, wenn der Nutzer EXPLIZIT "live stellen" sagt.
+- Ohne diese exakte Bestätigung muss der Agent den Merge verweigern.
+- Nach erfolgreichem Merge antwortet der Agent mit dem Commit-SHA und der URL.`;
