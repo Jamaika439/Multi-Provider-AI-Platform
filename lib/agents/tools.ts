@@ -203,11 +203,11 @@ export const agentTools = {
 
   publish: tool({
     description:
-      'Merged den Agent-Branch (agent-work) per GitHub API (POST /merges) nach main. DARF NUR AUSGEFÜHRT WERDEN, WENN DER NUTZER AUSDRÜCKLICH "live stellen" SAGT.',
+      'Merged den Agent-Branch (agent-work) per GitHub API (POST /merges) nach main. ERFORDERLICH: Der Nutzer muss EXPLIZIT "live stellen" sagen. Ohne diese exakte Bestätigung wird der Merge verweigert. Usage: publish({ confirm: "live stellen" })',
     inputSchema: z.object({
       confirm: z
         .literal('live stellen')
-        .describe('Bestätigung: Muss exakt "live stellen" sein, damit der Merge ausgeführt wird.'),
+        .describe('Bestätigung: Muss exakt "live stellen" sein. Tipp: Schreibe im Chat "live stellen" damit ich das Tool ausführe.'),
     }),
     execute: async ({ confirm }) => {
       if (confirm !== 'live stellen') {
