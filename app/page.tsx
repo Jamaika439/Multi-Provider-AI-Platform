@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 
@@ -20,6 +22,7 @@ import {
   Copy,
   Cpu,
   FileText,
+  LogOut,
   Menu,
   MessageSquare,
   Mic,
@@ -412,6 +415,8 @@ export default function Home() {
   const [agentTab, setAgentTab] = useState<'logs' | 'tools'>('logs');
   const [isAgentMode, setIsAgentMode] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const router = useRouter();
 
   const isCheckingKeys = checkingMode !== null;
 
@@ -449,6 +454,30 @@ export default function Home() {
   const selectedModelLabel = selectedModelDef?.label ?? '';
   const modelGroups = getModelGroups(onlyFree);
   const shownError = errorMessage || error?.message || '';
+
+  // Login prüfen; ohne Anmeldung geht es zur Login-Seite
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/me')
+      .then(async (response) => {
+        if (cancelled) return;
+        if (!response.ok) {
+          router.replace('/login');
+          return;
+        }
+        const data = (await response.json()) as { email: string };
+        setUserEmail(data.email);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
+  };
 
   // Chatliste beim Start laden
   useEffect(() => {
@@ -1006,6 +1035,21 @@ export default function Home() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {userEmail && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs">
+              <span className="min-w-0 truncate text-zinc-300">{userEmail}</span>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="shrink-0 rounded p-1 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+                title="Abmelden"
+                aria-label="Abmelden"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
 
           <div>
