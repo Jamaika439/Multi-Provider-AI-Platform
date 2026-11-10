@@ -5,6 +5,7 @@ import { findModel, IMAGE_MODEL } from '@/lib/models';
 import { getLanguageModel, MissingApiKeyError } from '@/lib/providers';
 import { getMessageText, makeChatTitle } from '@/lib/messages';
 import { agentTools, AGENT_SYSTEM } from '@/lib/agents/tools';
+import { claimChat, getCurrentUser, isAdmin } from '@/lib/auth';
 
 // Agent-Läufe mit mehreren Schritten brauchen Zeit.
 // Vercel: je nach Plan sind bis zu 300 s möglich, sonst ggf. auf 60 senken.
@@ -28,6 +29,11 @@ const AGENT_MAX_STEPS = 15;
 
 export async function POST(req: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Nicht eingeloggt' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { messages, chatId, model: modelKey, agent } = body;
 
@@ -40,6 +46,26 @@ export async function POST(req: Request) {
 
     const modelDef = findModel(modelKey) ?? findModel('gemini-3.8-flash')!;
     const activeChatId = chatId || `chat-${Date.now()}`;
+
+    // Bezahlte Modelle und der Agent-Modus (schreibt ins Repo) nur für den Admin
+    const admin = await isAdmin();
+    if (!modelDef.isFree && !admin) {
+      return NextResponse.json(
+        { error: 'Bezahlte Modelle sind nur für den Admin freigeschaltet.' },
+        { status: 403 }
+      );
+    }
+    if (agent === true && !admin) {
+      return NextResponse.json(
+        { error: 'Der Agent-Modus ist nur für den Admin (zuerst unter /admin anmelden).' },
+        { status: 403 }
+      );
+    }
+
+    // Chat dem Nutzer zuordnen; fremde Chat-IDs werden abgelehnt
+    if (!(await claimChat(activeChatId, user.id))) {
+      return NextResponse.json({ error: 'Kein Zugriff auf diesen Chat.' }, { status: 403 });
+    }
 
     // Nachrichten formatieren
     const formattedMessages = messages.map((m: any) => {
