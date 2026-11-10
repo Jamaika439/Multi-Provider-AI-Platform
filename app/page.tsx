@@ -231,6 +231,125 @@ function GeneratedImage({ url }: { url: string }) {
 // 4. Hauptkomponente
 // =============================================================================
 
+// =============================================================================
+// 3b. Kopieren-Button, Codeblöcke, einfache Markdown-Darstellung (ohne Pakete)
+// =============================================================================
+
+function CopyButton({
+  text,
+  label = 'Kopieren',
+}: {
+  text: string;
+  label?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* Zwischenablage nicht verfügbar */
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 transition hover:bg-zinc-700"
+    >
+      {copied ? '✓ Kopiert' : label}
+    </button>
+  );
+}
+
+function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const isLong = code.split('\n').length > 12;
+
+  return (
+    <div className="my-2 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
+      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-1 text-[11px] text-zinc-400">
+        <span>{lang || 'code'}</span>
+        <CopyButton text={code} />
+      </div>
+      <pre className="overflow-x-auto p-3 text-xs leading-relaxed text-zinc-200">
+        <code>{code}</code>
+      </pre>
+      {isLong && (
+        <div className="flex justify-end border-t border-zinc-800 bg-zinc-900 px-3 py-1">
+          <CopyButton text={code} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`\n]+`)/g);
+
+  return (
+    <span className="whitespace-pre-wrap">
+      {parts.map((part, index) => {
+        if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
+          return (
+            <code
+              key={index}
+              className="rounded bg-zinc-800 px-1 py-0.5 text-[0.85em] text-indigo-300"
+            >
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return part;
+      })}
+    </span>
+  );
+}
+
+type Segment =
+  | { type: 'text'; value: string }
+  | { type: 'code'; lang: string; value: string };
+
+function RichText({ text }: { text: string }) {
+  const segments: Segment[] = [];
+  // Auch ein noch nicht geschlossener Codeblock (beim Streaming) wird erkannt
+  const regex = /```([^\n`]*)\n([\s\S]*?)(?:```|$)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) {
+      segments.push({ type: 'text', value: text.slice(last, match.index) });
+    }
+    segments.push({
+      type: 'code',
+      lang: match[1].trim(),
+      value: match[2].replace(/\n$/, ''),
+    });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) {
+    segments.push({ type: 'text', value: text.slice(last) });
+  }
+
+  return (
+    <>
+      {segments.map((segment, index) => {
+        if (segment.type === 'code') {
+          return <CodeBlock key={index} code={segment.value} lang={segment.lang} />;
+        }
+        const value = segment.value.replace(/^\n+|\n+$/g, '');
+        return value ? <InlineText key={index} text={value} /> : null;
+      })}
+    </>
+  );
+}
+
 export default function Home() {
   const [selectedModel, setSelectedModel] = useState<ModelKey>(DEFAULT_MODEL);
   const [onlyFree, setOnlyFree] = useState(true);
@@ -253,11 +372,14 @@ export default function Home() {
   const [isAgentOpen, setIsAgentOpen] = useState(false);
   const [agentTab, setAgentTab] = useState<'logs' | 'tools'>('logs');
   const [isAgentMode, setIsAgentMode] = useState(false);
+  const [justFinished, setJustFinished] = useState(false);
 
   const isCheckingKeys = checkingMode !== null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const fetchChats = useCallback(async () => {
@@ -278,6 +400,7 @@ export default function Home() {
       transport,
       onFinish: () => {
         void fetchChats();
+        setJustFinished(true);
       },
     });
 
@@ -293,9 +416,30 @@ export default function Home() {
     void fetchChats();
   }, [fetchChats]);
 
+  // Nur mitscrollen, solange der Nutzer unten ist. Wer hochscrollt (z. B. zum
+  // Kopieren), wird nicht mehr nach unten gezogen.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (stickToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
   }, [messages, status]);
+
+  const handleChatScroll = () => {
+    const element = scrollContainerRef.current;
+    if (!element) return;
+    stickToBottomRef.current =
+      element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+  };
+
+  // Tab-Titel zeigt, wann die Antwort fertig ist (auch in anderem Tab sichtbar)
+  useEffect(() => {
+    const base = 'AI Platform 2026';
+    document.title = isLoading
+      ? `⏳ Arbeitet… – ${base}`
+      : justFinished
+        ? `✓ Fertig – ${base}`
+        : base;
+  }, [isLoading, justFinished]);
 
   useEffect(() => {
     return () => {
@@ -567,6 +711,8 @@ export default function Home() {
     clearError();
     setInput('');
     setAttachedFiles([]);
+    setJustFinished(false);
+    stickToBottomRef.current = true;
 
     await sendMessage(
       { text: prompt },
@@ -850,7 +996,11 @@ export default function Home() {
         </button>
 
         {/* ------------------------- CHAT-VERLAUF ------------------------- */}
-        <div className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleChatScroll}
+          className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6 lg:p-8"
+        >
           {/* Platzhalter, damit der Hamburger-Button keine Nachricht überdeckt */}
           <div className="h-8 shrink-0 xl:hidden" aria-hidden="true" />
 
@@ -944,7 +1094,19 @@ export default function Home() {
                       </div>
                     )}
 
-                    {displayText}
+                    {!isUser && displayText && (
+                      <div className="mb-2 flex justify-end">
+                        <CopyButton text={displayText} label="Antwort kopieren" />
+                      </div>
+                    )}
+
+                    {isUser ? displayText : <RichText text={displayText} />}
+
+                    {!isUser && displayText.length > 300 && (
+                      <div className="mt-2 flex justify-end">
+                        <CopyButton text={displayText} label="Antwort kopieren" />
+                      </div>
+                    )}
 
                     {/* Angehängte Dateien als Chips */}
                     {fileNames.length > 0 && (
@@ -1008,6 +1170,22 @@ export default function Home() {
         {/* ------------------------- EINGABEBEREICH ------------------------- */}
         <div className="border-t border-zinc-800 bg-zinc-950/80 p-4 backdrop-blur-md md:p-6">
           <form onSubmit={submitMessage} className="mx-auto max-w-3xl space-y-2">
+            {/* Status: arbeitet / fertig */}
+            {(isLoading || justFinished) && (
+              <div className="flex items-center gap-2 text-xs">
+                {isLoading ? (
+                  <span className="animate-pulse text-amber-300">
+                    ●{' '}
+                    {isAgentMode && !isImageModel
+                      ? 'Agent arbeitet…'
+                      : 'Antwort wird geschrieben…'}
+                  </span>
+                ) : (
+                  <span className="text-emerald-400">✓ Fertig</span>
+                )}
+              </div>
+            )}
+
             {/* Angehängte Dateien (entfernbar) */}
             {attachedFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
