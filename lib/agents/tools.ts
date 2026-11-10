@@ -200,6 +200,33 @@ export const agentTools = {
       return (json.items ?? []).slice(0, 20).map((i: { path: string }) => i.path);
     },
   }),
+
+  publish: tool({
+    description:
+      'Merged den Agent-Branch (agent-work) per GitHub API (POST /merges) nach main. ERFORDERLICH: Der Nutzer muss EXPLIZIT "live stellen" sagen. Ohne diese exakte Bestätigung wird der Merge verweigert. Usage: publish({ confirm: "live stellen" })',
+    inputSchema: z.object({
+      confirm: z
+        .literal('live stellen')
+        .describe('Bestätigung: Muss exakt "live stellen" sein. Tipp: Schreibe im Chat "live stellen" damit ich das Tool ausführe.'),
+    }),
+    execute: async ({ confirm }) => {
+      if (confirm !== 'live stellen') {
+        return {
+          ok: false,
+          error: 'Abbruch: Der Nutzer hat nicht "live stellen" gesagt. Merge wird nicht ausgeführt.',
+        };
+      }
+      const result = await gh('/merges', {
+        method: 'POST',
+        body: JSON.stringify({
+          base: BASE_BRANCH,
+          head: AGENT_BRANCH,
+          commit_message: 'Merge agent-work into main via agent publish',
+        }),
+      });
+      return { ok: true, sha: result.sha, html_url: result.html_url };
+    },
+  }),
 };
 
 export const AGENT_SYSTEM = `Du bist ein Senior Software Engineer im Repository-Agent-Modus.
@@ -211,4 +238,9 @@ Pflicht-Ablauf:
 3. writeFile ist für neue Dateien gedacht.
 4. Wenn der Nutzer etwas weiterentwickeln will, das es schon gibt, baue auf der vorhandenen Datei auf, statt sie neu zu erfinden.
 5. Zum Wiederherstellen alter Stände: fileHistory, dann readFile mit ref.
-6. Prüfe Änderungen am Ende mit readFile gegen und antworte mit einer kurzen Zusammenfassung.`;
+6. Prüfe Änderungen am Ende mit readFile gegen und antworte mit einer kurzen Zusammenfassung.
+
+Publish-Regel:
+- Das Tool "publish" darf NUR ausgeführt werden, wenn der Nutzer EXPLIZIT "live stellen" sagt.
+- Ohne diese exakte Bestätigung muss der Agent den Merge verweigern.
+- Nach erfolgreichem Merge antwortet der Agent mit dem Commit-SHA und der URL.`;
