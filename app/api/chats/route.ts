@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { ensureAuthTables, getCurrentUser } from '@/lib/auth';
 
 interface ChatRow {
   id: string;
@@ -9,14 +10,22 @@ interface ChatRow {
 
 /**
  * GET /api/chats
- * Lädt die Liste aller gespeicherten Chats aus der Neon PostgreSQL-Datenbank.
+ * Lädt die Chats des eingeloggten Nutzers aus der Neon PostgreSQL-Datenbank.
  */
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Nicht eingeloggt' }, { status: 401 });
+  }
+
   try {
+    await ensureAuthTables();
     const chats = (await sql`
-      SELECT id, title, created_at 
-      FROM chats 
-      ORDER BY created_at DESC
+      SELECT c.id, c.title, c.created_at
+      FROM chats c
+      JOIN chat_owners o ON o.chat_id = c.id
+      WHERE o.user_id = ${user.id}
+      ORDER BY c.created_at DESC
     `) as ChatRow[];
 
     return NextResponse.json(chats);
