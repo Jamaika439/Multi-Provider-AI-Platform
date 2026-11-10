@@ -14,7 +14,10 @@ import { DefaultChatTransport, type UIMessage } from 'ai';
 
 import {
   Bot,
+  Check,
   CheckCircle2,
+  ChevronDown,
+  Copy,
   Cpu,
   FileText,
   Menu,
@@ -258,27 +261,63 @@ function CopyButton({
     <button
       type="button"
       onClick={() => void copy()}
-      className="rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 transition hover:bg-zinc-700"
+      aria-label={label}
+      className="group/copy relative rounded-md p-1 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
     >
-      {copied ? '✓ Kopiert' : label}
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-400" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+      <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1 whitespace-nowrap rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-normal text-zinc-200 opacity-0 shadow transition group-hover/copy:opacity-100">
+        {copied ? 'Kopiert' : label}
+      </span>
     </button>
   );
 }
 
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
-  const isLong = code.split('\n').length > 12;
+  const lineCount = code.split('\n').length;
+  // Lange Blöcke (z. B. aus dem Verlauf) starten eingeklappt, kurze offen.
+  // Der Startwert gilt nur beim ersten Anzeigen, ein streamender Block bleibt
+  // also offen, bis du ihn selbst einklappst.
+  const [open, setOpen] = useState(lineCount <= 15);
+  const isLong = lineCount > 12;
 
   return (
-    <div className="my-2 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-1 text-[11px] text-zinc-400">
-        <span>{lang || 'code'}</span>
+    <div className="my-2 rounded-lg border border-zinc-700 bg-zinc-950">
+      <div
+        className={`flex items-center justify-between bg-zinc-900 px-3 py-1 text-[11px] text-zinc-400 ${
+          open ? 'rounded-t-lg border-b border-zinc-800' : 'rounded-lg'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="flex items-center gap-1.5 transition hover:text-zinc-200"
+        >
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${
+              open ? '' : '-rotate-90'
+            }`}
+          />
+          <span>{lang || 'code'}</span>
+          <span className="text-zinc-600">
+            · {lineCount} {lineCount === 1 ? 'Zeile' : 'Zeilen'}
+          </span>
+        </button>
         <CopyButton text={code} />
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-relaxed text-zinc-200">
-        <code>{code}</code>
-      </pre>
-      {isLong && (
-        <div className="flex justify-end border-t border-zinc-800 bg-zinc-900 px-3 py-1">
+
+      {open && (
+        <pre className="overflow-x-auto p-3 text-xs leading-relaxed text-zinc-200">
+          <code>{code}</code>
+        </pre>
+      )}
+
+      {open && isLong && (
+        <div className="flex justify-end rounded-b-lg border-t border-zinc-800 bg-zinc-900 px-3 py-1">
           <CopyButton text={code} />
         </div>
       )}
@@ -1096,7 +1135,7 @@ export default function Home() {
 
                     {!isUser && displayText && (
                       <div className="mb-2 flex justify-end">
-                        <CopyButton text={displayText} label="Antwort kopieren" />
+                        <CopyButton text={displayText} />
                       </div>
                     )}
 
@@ -1104,7 +1143,7 @@ export default function Home() {
 
                     {!isUser && displayText.length > 300 && (
                       <div className="mt-2 flex justify-end">
-                        <CopyButton text={displayText} label="Antwort kopieren" />
+                        <CopyButton text={displayText} />
                       </div>
                     )}
 
