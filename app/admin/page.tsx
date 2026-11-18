@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface UserRow {
   id: string;
@@ -35,8 +36,29 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    fetch('/api/admin/users')
+      .then(async (response) => {
+        if (cancelled) return;
+        if (response.status === 401) {
+          setAuthed(false);
+          return;
+        }
+        if (!response.ok) {
+          setError('Die Liste konnte nicht geladen werden.');
+          return;
+        }
+        setUsers((await response.json()) as UserRow[]);
+        setAuthed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Der Server ist nicht erreichbar.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const login = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -118,12 +140,12 @@ export default function AdminPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Konten ({users.length})</h1>
           <div className="flex gap-2">
-            <a
+            <Link
               href="/"
               className="rounded-lg border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-800"
             >
               Zum Chat
-            </a>
+            </Link>
             <button
               type="button"
               onClick={() => void logout()}

@@ -481,8 +481,25 @@ export default function Home() {
 
   // Chatliste beim Start laden
   useEffect(() => {
-    void fetchChats();
-  }, [fetchChats]);
+    let cancelled = false;
+    fetch('/api/chats')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Die Chatliste konnte nicht geladen werden.');
+        }
+        return response.json() as Promise<ChatItem[]>;
+      })
+      .then((data) => {
+        if (!cancelled) setChats(data);
+      })
+      .catch((loadError) => {
+        console.error('Fehler beim Laden der Chats:', loadError);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Nur mitscrollen, solange der Nutzer unten ist. Wer hochscrollt (z. B. zum
   // Kopieren), wird nicht mehr nach unten gezogen.
