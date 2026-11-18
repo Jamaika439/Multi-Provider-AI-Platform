@@ -14,7 +14,7 @@ import { claimChat, getCurrentUser, isAdmin } from '@/lib/auth';
 
 // Agent-Läufe mit mehreren Schritten brauchen Zeit.
 // Vercel: je nach Plan sind bis zu 300 s möglich, sonst ggf. auf 60 senken.
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 /**
  * Maximale Ausgabelänge pro Antwort (bzw. pro Agent-Schritt) je Anbieter.
