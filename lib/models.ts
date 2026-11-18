@@ -107,6 +107,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-20b',
     isFree: true,
+    supportsSystemMessage: true,
   },
   {
     key: 'groq-gpt-oss-120b',
@@ -115,6 +116,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-120b',
     isFree: true,
+    supportsSystemMessage: true,
   },
 
   // --- Cohere -----------------------------------------------------------------
@@ -125,6 +127,7 @@ export const MODELS = [
     provider: 'cohere',
     id: 'command-a-03-2025',
     isFree: true,
+    supportsSystemMessage: true,
   },
 
   // --- OpenRouter Free --------------------------------------------------------
