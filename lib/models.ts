@@ -133,6 +133,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'openrouter/free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-nemotron-ultra',
@@ -141,6 +142,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-nemotron-super',
@@ -149,6 +151,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3-super-120b-a12b:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-gemma-4-31b',
@@ -157,6 +160,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'google/gemma-4-31b-it:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-minimax-flash',
@@ -165,6 +169,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'minimax/minimax-m3.1-flash:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
 
   // --- Tools ------------------------------------------------------------------
