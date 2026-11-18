@@ -188,12 +188,13 @@ export const MODELS = [
     provider: 'image',
     id: 'pollinations',
     isFree: true,
+    supportsSystemMessage: false,
   },
 ] as const satisfies readonly ModelDefinition[];
 
 export type ModelKey = (typeof MODELS)[number]['key'];
 
-export const DEFAULT_MODEL: ModelKey = 'gemini-3.8-flash';
+export const DEFAULT_MODEL: ModelKey = 'gemini-1.5-flash';
 export const IMAGE_MODEL: ModelKey = 'pollinations-image';
 
 export function findModel(key: unknown): ModelDefinition | undefined {
