@@ -156,6 +156,9 @@ export async function POST(req: Request) {
           console.error('Fehler beim Speichern in Neon:', dbError);
         }
       },
+      onError: (error) => {
+        console.error('[streamText]', error);
+      },
     });
 
     return result.toUIMessageStreamResponse();
