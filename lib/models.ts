@@ -1,3 +1,13 @@
+/**
+ * lib/models.ts
+ * =============================================================================
+ * Zentrale Modellliste der App.
+ * Stand: 18.11.2026
+ * Hinweis: Gratis-Modelle (vor allem bei OpenRouter) verschwinden oft. Meldet
+ * ein Modell "No endpoints found", Eintrag hier löschen.
+ * =============================================================================
+ */
+
 export type ProviderName =
   | 'google'
   | 'openai'
@@ -14,47 +24,41 @@ export interface ModelDefinition {
   id: string;
   /** true = Free-Tier / Rate-Limits, false = bezahlt */
   isFree: boolean;
-  /** Ob das Modell System-Nachrichten unterstützt (OpenRouter Free oft nicht) */
-  supportsSystemMessage?: boolean;
 }
 
 export const MODELS = [
   // --- Google AI Studio -------------------------------------------------------
   {
-    key: 'gemini-1.5-flash',
-    label: 'Gemini 1.5 Flash (Google, schnell & kostenlos)',
+    key: 'gemini-3.5-flash-lite',
+    label: 'Gemini 3.5 Flash-Lite (Google)',
     group: 'Google AI Studio',
     provider: 'google',
-    id: 'gemini-1.5-flash',
+    id: 'gemini-3.5-flash-lite',
     isFree: true,
-    supportsSystemMessage: true,
   },
   {
-    key: 'gemini-1.5-flash-latest',
-    label: 'Gemini 1.5 Flash Latest (Google, immer aktuell)',
+    key: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash-Lite (Google)',
     group: 'Google AI Studio',
     provider: 'google',
-    id: 'gemini-1.5-flash-latest',
+    id: 'gemini-3.1-flash-lite',
     isFree: true,
-    supportsSystemMessage: true,
   },
   {
-    key: 'gemini-2.0-flash-exp',
-    label: 'Gemini 2.0 Flash Experimental (Google, neueste Features)',
+    key: 'gemini-3.6-flash',
+    label: 'Gemini 3.6 Flash (Google)',
     group: 'Google AI Studio',
     provider: 'google',
-    id: 'gemini-2.0-flash-exp',
+    id: 'gemini-3.6-flash',
     isFree: true,
-    supportsSystemMessage: true,
   },
   {
-    key: 'gemini-1.5-pro',
-    label: 'Gemini 1.5 Pro (Google, stärkeres Modell)',
+    key: 'gemini-3.8-flash',
+    label: 'Gemini 3.8 Flash (Google, Free-Tier oft überlastet)',
     group: 'Google AI Studio',
     provider: 'google',
-    id: 'gemini-1.5-pro',
-    isFree: false,
-    supportsSystemMessage: true,
+    id: 'gemini-3.8-flash',
+    isFree: true,
   },
   {
     key: 'gemini-3.1-pro',
@@ -64,24 +68,7 @@ export const MODELS = [
     id: 'gemini-3.1-pro-preview',
     isFree: false,
   },
-  {
-    key: 'google-flash-1',
-    label: 'Google Flash 1',
-    group: 'Google Flash',
-    provider: 'google',
-    id: 'google-flash-1',
-    isFree: true,
-    supportsSystemMessage: true,
-  },
-  {
-    key: 'google-flash-2',
-    label: 'Google Flash 2',
-    group: 'Google Flash',
-    provider: 'google',
-    id: 'google-flash-2',
-    isFree: true,
-    supportsSystemMessage: true,
-  },
+
   // --- OpenAI (bezahlt) -------------------------------------------------------
   {
     key: 'gpt-6-luna',
@@ -90,7 +77,6 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-luna',
     isFree: false,
-    supportsSystemMessage: true,
   },
   {
     key: 'gpt-6.1-sol',
@@ -99,7 +85,6 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6.1-sol',
     isFree: false,
-    supportsSystemMessage: true,
   },
   {
     key: 'gpt-6-astra',
@@ -108,8 +93,8 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-astra',
     isFree: false,
-    supportsSystemMessage: true,
   },
+
   // --- Groq -------------------------------------------------------------------
   {
     key: 'groq-gpt-oss-20b',
@@ -118,7 +103,6 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-20b',
     isFree: true,
-    supportsSystemMessage: true,
   },
   {
     key: 'groq-gpt-oss-120b',
@@ -127,8 +111,8 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-120b',
     isFree: true,
-    supportsSystemMessage: true,
   },
+
   // --- Cohere -----------------------------------------------------------------
   {
     key: 'cohere-command-a',
@@ -137,54 +121,74 @@ export const MODELS = [
     provider: 'cohere',
     id: 'command-a-03-2025',
     isFree: true,
-    supportsSystemMessage: true,
   },
-  // --- OpenRouter -------------------------------------------------------------
+
+  // --- OpenRouter Free --------------------------------------------------------
   {
     key: 'openrouter-free-router',
     label: 'Free Router (wählt automatisch)',
-    group: 'OpenRouter',
+    group: 'OpenRouter (Gratis)',
     provider: 'openrouter',
     id: 'openrouter/free',
     isFree: true,
-    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-nemotron-ultra',
     label: 'Nemotron 3 Ultra 550B',
-    group: 'OpenRouter',
+    group: 'OpenRouter (Gratis)',
     provider: 'openrouter',
-    id: 'nvidia/nemotron-3-ultra-550b-a55b',
+    id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     isFree: true,
-    supportsSystemMessage: false,
   },
   {
-    key: 'openrouter-nemotron-super',
-    label: 'Nemotron 3 Super 120B',
-    group: 'OpenRouter',
+    key: 'openrouter-nemotron-35-super-vl',
+    label: 'Nemotron 3.5 Super VL (Bild + Text)',
+    group: 'OpenRouter (Gratis)',
     provider: 'openrouter',
-    id: 'nvidia/nemotron-3-super-120b-a12b',
+    id: 'nvidia/nemotron-3.5-super-vl:free',
     isFree: true,
-    supportsSystemMessage: false,
+  },
+  {
+    key: 'openrouter-nemotron-35-lightning',
+    label: 'Nemotron 3.5 Lightning (schnell, 1M Kontext)',
+    group: 'OpenRouter (Gratis)',
+    provider: 'openrouter',
+    id: 'nvidia/nemotron-3.5-lightning:free',
+    isFree: true,
+  },
+  {
+    key: 'openrouter-north-mini-code',
+    label: 'North Mini Code (Cohere, Coding)',
+    group: 'OpenRouter (Gratis)',
+    provider: 'openrouter',
+    id: 'cohere/north-mini-code:free',
+    isFree: true,
+  },
+  {
+    key: 'openrouter-flint',
+    label: 'Flint v1.0 (Coding-Agenten)',
+    group: 'OpenRouter (Gratis)',
+    provider: 'openrouter',
+    id: 'recursive/flint-v1.0:free',
+    isFree: true,
   },
   {
     key: 'openrouter-gemma-4-31b',
     label: 'Gemma 4 31B (Google)',
-    group: 'OpenRouter',
+    group: 'OpenRouter (Gratis)',
     provider: 'openrouter',
-    id: 'google/gemma-4-31b-it',
+    id: 'google/gemma-4-31b-it:free',
     isFree: true,
-    supportsSystemMessage: false,
   },
   {
-    key: 'openrouter-minimax-flash',
-    label: 'MiniMax M3.1 Flash',
-    group: 'OpenRouter',
+    key: 'openrouter-gemma-4-26b',
+    label: 'Gemma 4 26B A4B (Google)',
+    group: 'OpenRouter (Gratis)',
     provider: 'openrouter',
-    id: 'minimax/minimax-m3.1-flash',
+    id: 'google/gemma-4-26b-a4b-it:free',
     isFree: true,
-    supportsSystemMessage: false,
   },
+
   // --- Tools ------------------------------------------------------------------
   {
     key: 'pollinations-image',
@@ -193,13 +197,13 @@ export const MODELS = [
     provider: 'image',
     id: 'pollinations',
     isFree: true,
-    supportsSystemMessage: false,
   },
 ] as const satisfies readonly ModelDefinition[];
 
 export type ModelKey = (typeof MODELS)[number]['key'];
 
-export const DEFAULT_MODEL: ModelKey = 'gemini-1.5-flash';
+// Standardmodell: schnell und im Free-Tier zuverlässig
+export const DEFAULT_MODEL: ModelKey = 'gemini-3.5-flash-lite';
 export const IMAGE_MODEL: ModelKey = 'pollinations-image';
 
 export function findModel(key: unknown): ModelDefinition | undefined {
