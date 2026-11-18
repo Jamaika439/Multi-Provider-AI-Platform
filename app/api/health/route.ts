@@ -26,6 +26,7 @@
  * =============================================================================
  */
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 
 import { MODELS } from '@/lib/models';
 import {
