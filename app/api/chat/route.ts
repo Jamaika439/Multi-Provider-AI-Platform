@@ -103,16 +103,17 @@ export async function POST(req: Request) {
         { role: 'assistant', content: imageMarkdown },
       ]);
 
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(imageMarkdown));
-          controller.close();
+      // Korrektes UI-Message-Stream-Format für useChat
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          const id = `img-${Date.now()}`;
+          writer.write({ type: 'text-start', id });
+          writer.write({ type: 'text-delta', id, delta: imageMarkdown });
+          writer.write({ type: 'text-end', id });
         },
       });
 
-      return new Response(stream, {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      });
+      return createUIMessageStreamResponse({ stream });
     }
 
     // === Sprachmodell (normal oder Agent-Modus) ===
