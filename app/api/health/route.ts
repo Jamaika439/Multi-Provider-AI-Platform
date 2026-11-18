@@ -26,6 +26,7 @@
  * =============================================================================
  */
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 
 import { MODELS } from '@/lib/models';
 import {
@@ -313,6 +314,11 @@ async function checkKey(
 }
 
 export async function GET(req: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Nicht eingeloggt' }, { status: 401 });
+  }
+
   const deep = new URL(req.url).searchParams.get('deep') === '1';
 
   const providers = Object.keys(CHECKS) as KeyedProvider[];

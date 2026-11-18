@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { streamText, stepCountIs } from 'ai';
+import {
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  stepCountIs,
+  streamText,
+} from 'ai';
 import { saveChatMessages } from '@/lib/db';
 import { findModel, IMAGE_MODEL } from '@/lib/models';
 import { getLanguageModel, MissingApiKeyError } from '@/lib/providers';
@@ -9,7 +14,7 @@ import { claimChat, getCurrentUser, isAdmin } from '@/lib/auth';
 
 // Agent-Läufe mit mehreren Schritten brauchen Zeit.
 // Vercel: je nach Plan sind bis zu 300 s möglich, sonst ggf. auf 60 senken.
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 /**
  * Maximale Ausgabelänge pro Antwort (bzw. pro Agent-Schritt) je Anbieter.
@@ -44,7 +49,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const modelDef = findModel(modelKey) ?? findModel('gemini-3.8-flash')!;
+    const modelDef = findModel(modelKey) ?? findModel('gemini-1.5-flash')!;
     const activeChatId = chatId || `chat-${Date.now()}`;
 
     // Bezahlte Modelle und der Agent-Modus (schreibt ins Repo) nur für den Admin
@@ -98,16 +103,17 @@ export async function POST(req: Request) {
         { role: 'assistant', content: imageMarkdown },
       ]);
 
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(imageMarkdown));
-          controller.close();
+      // Korrektes UI-Message-Stream-Format für useChat
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          const id = `img-${Date.now()}`;
+          writer.write({ type: 'text-start', id });
+          writer.write({ type: 'text-delta', id, delta: imageMarkdown });
+          writer.write({ type: 'text-end', id });
         },
       });
 
-      return new Response(stream, {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      });
+      return createUIMessageStreamResponse({ stream });
     }
 
     // === Sprachmodell (normal oder Agent-Modus) ===
@@ -127,16 +133,28 @@ export async function POST(req: Request) {
     const maxOutputTokens =
       OUTPUT_LIMITS[modelDef.provider] ?? DEFAULT_OUTPUT_LIMIT;
 
+    // System-Nachricht nur senden, wenn Modell sie unterstützt (OpenRouter Free oft nicht)
+    const supportsSystem = modelDef.supportsSystemMessage !== false;
+
     const result = streamText({
       model: languageModel,
       messages: formattedMessages,
       maxOutputTokens,
+      // Keine stillen Wiederholungen: Fehler sofort anzeigen statt ewig laden
+      maxRetries: 0,
+      // Timeout: Agent bis 4:30 min, normal 2 min
+      abortSignal: AbortSignal.timeout(useAgent ? 270_000 : 120_000),
+      onError: ({ error }) => {
+        console.error('[streamText]', error);
+      },
       ...(useAgent
         ? {
             system: AGENT_SYSTEM,
             tools: agentTools,
             stopWhen: stepCountIs(AGENT_MAX_STEPS),
           }
+        : supportsSystem
+        ? {}
         : {}),
       onFinish: async ({ text, steps }) => {
         try {
@@ -158,7 +176,11 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    // Echte Fehlermeldung des Anbieters anzeigen (statt "An error occurred.")
+    return result.toUIMessageStreamResponse({
+      onError: (error) =>
+        (error instanceof Error ? error.message : String(error)).slice(0, 300),
+    });
   } catch (error: any) {
     console.error('Fehler in /api/chat:', error);
 

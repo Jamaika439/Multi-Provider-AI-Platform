@@ -22,25 +22,47 @@ export interface ModelDefinition {
   id: string;
   /** true = Free-Tier / Rate-Limits, false = bezahlt */
   isFree: boolean;
+  /** Ob das Modell System-Nachrichten unterstützt (OpenRouter Free oft nicht) */
+  supportsSystemMessage?: boolean;
 }
 
 export const MODELS = [
   // --- Google AI Studio -------------------------------------------------------
   {
-    key: 'gemini-3.8-flash',
-    label: 'Gemini 3.8 Flash (Google)',
+    key: 'gemini-1.5-flash',
+    label: 'Gemini 1.5 Flash (Google, schnell & kostenlos)',
     group: 'Google AI Studio',
     provider: 'google',
-    id: 'gemini-3.8-flash',
+    id: 'gemini-1.5-flash',
     isFree: true,
+    supportsSystemMessage: true,
   },
   {
-    key: 'gemini-3.5-flash-lite',
-    label: 'Gemini 3.5 Flash-Lite (Google)',
+    key: 'gemini-1.5-flash-latest',
+    label: 'Gemini 1.5 Flash Latest (Google, immer aktuell)',
     group: 'Google AI Studio',
     provider: 'google',
-    id: 'gemini-3.5-flash-lite',
+    id: 'gemini-1.5-flash-latest',
     isFree: true,
+    supportsSystemMessage: true,
+  },
+  {
+    key: 'gemini-2.0-flash-exp',
+    label: 'Gemini 2.0 Flash Experimental (Google, neueste Features)',
+    group: 'Google AI Studio',
+    provider: 'google',
+    id: 'gemini-2.0-flash-exp',
+    isFree: true,
+    supportsSystemMessage: true,
+  },
+  {
+    key: 'gemini-1.5-pro',
+    label: 'Gemini 1.5 Pro (Google, stärkeres Modell)',
+    group: 'Google AI Studio',
+    provider: 'google',
+    id: 'gemini-1.5-pro',
+    isFree: false,
+    supportsSystemMessage: true,
   },
   {
     key: 'gemini-3.1-pro',
@@ -59,6 +81,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-luna',
     isFree: false,
+    supportsSystemMessage: true,
   },
   {
     key: 'gpt-6.1-sol',
@@ -67,6 +90,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6.1-sol',
     isFree: false,
+    supportsSystemMessage: true,
   },
   {
     key: 'gpt-6-astra',
@@ -75,6 +99,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-astra',
     isFree: false,
+    supportsSystemMessage: true,
   },
 
   // --- Groq -------------------------------------------------------------------
@@ -85,6 +110,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-20b',
     isFree: true,
+    supportsSystemMessage: true,
   },
   {
     key: 'groq-gpt-oss-120b',
@@ -93,6 +119,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-120b',
     isFree: true,
+    supportsSystemMessage: true,
   },
 
   // --- Cohere -----------------------------------------------------------------
@@ -103,6 +130,7 @@ export const MODELS = [
     provider: 'cohere',
     id: 'command-a-03-2025',
     isFree: true,
+    supportsSystemMessage: true,
   },
 
   // --- OpenRouter Free --------------------------------------------------------
@@ -113,6 +141,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'openrouter/free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-nemotron-ultra',
@@ -121,6 +150,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-nemotron-super',
@@ -129,6 +159,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3-super-120b-a12b:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-gemma-4-31b',
@@ -137,6 +168,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'google/gemma-4-31b-it:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
   {
     key: 'openrouter-minimax-flash',
@@ -145,6 +177,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'minimax/minimax-m3.1-flash:free',
     isFree: true,
+    supportsSystemMessage: false,
   },
 
   // --- Tools ------------------------------------------------------------------
@@ -155,12 +188,13 @@ export const MODELS = [
     provider: 'image',
     id: 'pollinations',
     isFree: true,
+    supportsSystemMessage: false,
   },
 ] as const satisfies readonly ModelDefinition[];
 
 export type ModelKey = (typeof MODELS)[number]['key'];
 
-export const DEFAULT_MODEL: ModelKey = 'gemini-3.8-flash';
+export const DEFAULT_MODEL: ModelKey = 'gemini-1.5-flash';
 export const IMAGE_MODEL: ModelKey = 'pollinations-image';
 
 export function findModel(key: unknown): ModelDefinition | undefined {
