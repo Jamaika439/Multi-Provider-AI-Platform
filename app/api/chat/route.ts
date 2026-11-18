@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { streamText, stepCountIs } from 'ai';
+import {
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  stepCountIs,
+  streamText,
+} from 'ai';
 import { saveChatMessages } from '@/lib/db';
 import { findModel, IMAGE_MODEL } from '@/lib/models';
 import { getLanguageModel, MissingApiKeyError } from '@/lib/providers';
