@@ -1,11 +1,3 @@
-/**
- * lib/models.ts
- * =============================================================================
- * Zentrale Modellliste der App.
- * Stand: 20.10.2026
- * =============================================================================
- */
-
 export type ProviderName =
   | 'google'
   | 'openai'
@@ -72,7 +64,24 @@ export const MODELS = [
     id: 'gemini-3.1-pro-preview',
     isFree: false,
   },
-
+  {
+    key: 'google-flash-1',
+    label: 'Google Flash 1',
+    group: 'Google Flash',
+    provider: 'google',
+    id: 'google-flash-1',
+    isFree: true,
+    supportsSystemMessage: true,
+  },
+  {
+    key: 'google-flash-2',
+    label: 'Google Flash 2',
+    group: 'Google Flash',
+    provider: 'google',
+    id: 'google-flash-2',
+    isFree: true,
+    supportsSystemMessage: true,
+  },
   // --- OpenAI (bezahlt) -------------------------------------------------------
   {
     key: 'gpt-6-luna',
@@ -101,7 +110,6 @@ export const MODELS = [
     isFree: false,
     supportsSystemMessage: true,
   },
-
   // --- Groq -------------------------------------------------------------------
   {
     key: 'groq-gpt-oss-20b',
@@ -121,7 +129,6 @@ export const MODELS = [
     isFree: true,
     supportsSystemMessage: true,
   },
-
   // --- Cohere -----------------------------------------------------------------
   {
     key: 'cohere-command-a',
@@ -132,12 +139,11 @@ export const MODELS = [
     isFree: true,
     supportsSystemMessage: true,
   },
-
-  // --- OpenRouter Free --------------------------------------------------------
+  // --- OpenRouter -------------------------------------------------------------
   {
     key: 'openrouter-free-router',
     label: 'Free Router (wählt automatisch)',
-    group: 'OpenRouter (Gratis)',
+    group: 'OpenRouter',
     provider: 'openrouter',
     id: 'openrouter/free',
     isFree: true,
@@ -146,40 +152,39 @@ export const MODELS = [
   {
     key: 'openrouter-nemotron-ultra',
     label: 'Nemotron 3 Ultra 550B',
-    group: 'OpenRouter (Gratis)',
+    group: 'OpenRouter',
     provider: 'openrouter',
-    id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    id: 'nvidia/nemotron-3-ultra-550b-a55b',
     isFree: true,
     supportsSystemMessage: false,
   },
   {
     key: 'openrouter-nemotron-super',
     label: 'Nemotron 3 Super 120B',
-    group: 'OpenRouter (Gratis)',
+    group: 'OpenRouter',
     provider: 'openrouter',
-    id: 'nvidia/nemotron-3-super-120b-a12b:free',
+    id: 'nvidia/nemotron-3-super-120b-a12b',
     isFree: true,
     supportsSystemMessage: false,
   },
   {
     key: 'openrouter-gemma-4-31b',
     label: 'Gemma 4 31B (Google)',
-    group: 'OpenRouter (Gratis)',
+    group: 'OpenRouter',
     provider: 'openrouter',
-    id: 'google/gemma-4-31b-it:free',
+    id: 'google/gemma-4-31b-it',
     isFree: true,
     supportsSystemMessage: false,
   },
   {
     key: 'openrouter-minimax-flash',
     label: 'MiniMax M3.1 Flash',
-    group: 'OpenRouter (Gratis)',
+    group: 'OpenRouter',
     provider: 'openrouter',
-    id: 'minimax/minimax-m3.1-flash:free',
+    id: 'minimax/minimax-m3.1-flash',
     isFree: true,
     supportsSystemMessage: false,
   },
-
   // --- Tools ------------------------------------------------------------------
   {
     key: 'pollinations-image',
