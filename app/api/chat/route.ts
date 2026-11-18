@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const modelDef = findModel(modelKey) ?? findModel('gemini-3.8-flash')!;
+    const modelDef = findModel(modelKey) ?? findModel('gemini-1.5-flash')!;
     const activeChatId = chatId || `chat-${Date.now()}`;
 
     // Bezahlte Modelle und der Agent-Modus (schreibt ins Repo) nur für den Admin
