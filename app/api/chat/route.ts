@@ -6,14 +6,15 @@ import {
   streamText,
 } from 'ai';
 import { saveChatMessages } from '@/lib/db';
-import { findModel, IMAGE_MODEL } from '@/lib/models';
+import { DEFAULT_MODEL, findModel, IMAGE_MODEL } from '@/lib/models';
 import { getLanguageModel, MissingApiKeyError } from '@/lib/providers';
 import { getMessageText, makeChatTitle } from '@/lib/messages';
 import { agentTools, AGENT_SYSTEM } from '@/lib/agents/tools';
 import { claimChat, getCurrentUser, isAdmin } from '@/lib/auth';
 
-// Agent-Läufe mit mehreren Schritten brauchen Zeit.
-// Vercel: je nach Plan sind bis zu 300 s möglich, sonst ggf. auf 60 senken.
+// Maximale Laufzeit einer Anfrage in Sekunden (muss ein fester Wert sein).
+// Lange Agent-Läufe brauchen mehr (z. B. 300), sofern dein Vercel-Plan es
+// erlaubt. Die Abbruch-Zeiten unten müssen immer kleiner bleiben.
 export const maxDuration = 60;
 
 /**
@@ -32,6 +33,13 @@ const DEFAULT_OUTPUT_LIMIT = 8000;
 
 const AGENT_MAX_STEPS = 15;
 
+/** Form einer vom Browser gesendeten Nachricht (AI SDK: Text steckt in "parts"). */
+interface IncomingMessage {
+  role?: string;
+  content?: unknown;
+  parts?: readonly { type: string; text?: unknown }[];
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
@@ -49,7 +57,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const modelDef = findModel(modelKey) ?? findModel('gemini-1.5-flash')!;
+    const modelDef = findModel(modelKey) ?? findModel(DEFAULT_MODEL)!;
     const activeChatId = chatId || `chat-${Date.now()}`;
 
     // Bezahlte Modelle und der Agent-Modus (schreibt ins Repo) nur für den Admin
@@ -73,13 +81,15 @@ export async function POST(req: Request) {
     }
 
     // Nachrichten formatieren
-    const formattedMessages = messages.map((m: any) => {
+    const formattedMessages = (messages as IncomingMessage[]).map((m) => {
       let content = m.content;
       if (!content && Array.isArray(m.parts)) {
         content = getMessageText(m);
       }
       return {
-        role: m.role || 'user',
+        role: (m.role === 'assistant' ? 'assistant' : 'user') as
+          | 'user'
+          | 'assistant',
         content: typeof content === 'string' ? content : String(content || ''),
       };
     });
@@ -133,17 +143,15 @@ export async function POST(req: Request) {
     const maxOutputTokens =
       OUTPUT_LIMITS[modelDef.provider] ?? DEFAULT_OUTPUT_LIMIT;
 
-    // System-Nachricht nur senden, wenn Modell sie unterstützt (OpenRouter Free oft nicht)
-    const supportsSystem = modelDef.supportsSystemMessage !== false;
-
     const result = streamText({
       model: languageModel,
       messages: formattedMessages,
       maxOutputTokens,
       // Keine stillen Wiederholungen: Fehler sofort anzeigen statt ewig laden
       maxRetries: 0,
-      // Timeout: Agent bis 4:30 min, normal 2 min
-      abortSignal: AbortSignal.timeout(useAgent ? 270_000 : 120_000),
+      // Eigener Abbruch kurz vor dem Vercel-Limit, damit eine Fehlermeldung
+      // im Chat erscheint, statt dass die Verbindung stumm abreißt
+      abortSignal: AbortSignal.timeout(55_000),
       onError: ({ error }) => {
         console.error('[streamText]', error);
       },
@@ -153,8 +161,6 @@ export async function POST(req: Request) {
             tools: agentTools,
             stopWhen: stepCountIs(AGENT_MAX_STEPS),
           }
-        : supportsSystem
-        ? {}
         : {}),
       onFinish: async ({ text, steps }) => {
         try {
@@ -181,7 +187,7 @@ export async function POST(req: Request) {
       onError: (error) =>
         (error instanceof Error ? error.message : String(error)).slice(0, 300),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Fehler in /api/chat:', error);
 
     if (error instanceof MissingApiKeyError) {
@@ -189,7 +195,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: error.message || 'Fehler beim Verarbeiten der Nachricht' },
+      {
+        error:
+          (error instanceof Error && error.message) ||
+          'Fehler beim Verarbeiten der Nachricht',
+      },
       { status: 500 }
     );
   }
