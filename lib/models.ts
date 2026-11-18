@@ -22,6 +22,8 @@ export interface ModelDefinition {
   id: string;
   /** true = Free-Tier / Rate-Limits, false = bezahlt */
   isFree: boolean;
+  /** Ob das Modell System-Nachrichten unterstützt (OpenRouter Free oft nicht) */
+  supportsSystemMessage?: boolean;
 }
 
 export const MODELS = [
