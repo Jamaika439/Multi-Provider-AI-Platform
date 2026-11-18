@@ -81,6 +81,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-luna',
     isFree: false,
+    supportsSystemMessage: true,
   },
   {
     key: 'gpt-6.1-sol',
@@ -89,6 +90,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6.1-sol',
     isFree: false,
+    supportsSystemMessage: true,
   },
   {
     key: 'gpt-6-astra',
@@ -97,6 +99,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-astra',
     isFree: false,
+    supportsSystemMessage: true,
   },
 
   // --- Groq -------------------------------------------------------------------
