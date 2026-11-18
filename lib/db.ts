@@ -11,7 +11,11 @@
 import { neon } from '@neondatabase/serverless';
 
 /** Neon Client für Serverless-Abfragen via WebSockets / HTTP */
-export const sql = neon(process.env.DATABASE_URL!);
+const dbUrl = process.env.DATABASE_URL || process.env.DATABASE_URL_UNPOOLED;
+if (!dbUrl) {
+  throw new Error('DATABASE_URL is not set. Please configure it in Vercel environment variables.');
+}
+export const sql = neon(dbUrl);
 
 /** Form einer zu speichernden Nachricht. */
 export interface StoredMessage {
