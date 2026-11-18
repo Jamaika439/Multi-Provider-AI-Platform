@@ -133,16 +133,28 @@ export async function POST(req: Request) {
     const maxOutputTokens =
       OUTPUT_LIMITS[modelDef.provider] ?? DEFAULT_OUTPUT_LIMIT;
 
+    // System-Nachricht nur senden, wenn Modell sie unterstützt (OpenRouter Free oft nicht)
+    const supportsSystem = modelDef.supportsSystemMessage !== false;
+
     const result = streamText({
       model: languageModel,
       messages: formattedMessages,
       maxOutputTokens,
+      // Keine stillen Wiederholungen: Fehler sofort anzeigen statt ewig laden
+      maxRetries: 0,
+      // Timeout: Agent bis 4:30 min, normal 2 min
+      abortSignal: AbortSignal.timeout(useAgent ? 270_000 : 120_000),
+      onError: ({ error }) => {
+        console.error('[streamText]', error);
+      },
       ...(useAgent
         ? {
             system: AGENT_SYSTEM,
             tools: agentTools,
             stopWhen: stepCountIs(AGENT_MAX_STEPS),
           }
+        : supportsSystem
+        ? {}
         : {}),
       onFinish: async ({ text, steps }) => {
         try {
@@ -162,12 +174,13 @@ export async function POST(req: Request) {
           console.error('Fehler beim Speichern in Neon:', dbError);
         }
       },
-      onError: (error) => {
-        console.error('[streamText]', error);
-      },
     });
 
-    return result.toUIMessageStreamResponse();
+    // Echte Fehlermeldung des Anbieters anzeigen (statt "An error occurred.")
+    return result.toUIMessageStreamResponse({
+      onError: (error) =>
+        (error instanceof Error ? error.message : String(error)).slice(0, 300),
+    });
   } catch (error: any) {
     console.error('Fehler in /api/chat:', error);
 
