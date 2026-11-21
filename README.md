@@ -1,6 +1,6 @@
 # AI Platform 2026
 
-Chat mit mehreren KI-Anbietern (Google, OpenAI, Groq, Cohere, OpenRouter) plus Bildgenerierung über Pollinations.
+Chat mit mehreren KI-Anbietern (Google, OpenAI, Groq, Cohere, OpenRouter, NVIDIA NIM, Cloudflare Workers AI) plus Bildgenerierung über Pollinations.
 Mit Benutzerkonten, Admin-Bereich und einem Agent-Modus, der das eigene GitHub-Repo bearbeiten kann.
 
 - Live: https://multi-provider-ai-platform.vercel.app
