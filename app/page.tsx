@@ -46,7 +46,6 @@ import {
 } from '@/lib/messages';
 import {
   DEFAULT_MODEL,
-  IMAGE_MODEL,
   MODELS,
   getModelGroups,
   type ModelDefinition,
@@ -543,7 +542,8 @@ export default function Home() {
     });
 
   const isLoading = status === 'submitted' || status === 'streaming';
-  const isImageModel = selectedModel === IMAGE_MODEL;
+  const isImageModel =
+    MODELS.find((model) => model.key === selectedModel)?.provider === 'image';
   const selectedModelDef = MODELS.find((model) => model.key === selectedModel);
   const selectedModelLabel = selectedModelDef?.label ?? '';
   const selectedCaps = selectedModelDef as ModelDefinition | undefined;
