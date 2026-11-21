@@ -56,6 +56,7 @@ export async function generateImage(
   if (!accountId || keys.length === 0) return null;
 
   let lastStatus = 0;
+  let lastDetail = '';
   for (const key of keys) {
     const response = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${IMAGE_MODEL_ID}`,
@@ -68,7 +69,6 @@ export async function generateImage(
         body: JSON.stringify({
           prompt: prompt.slice(0, 2000),
           steps: 8,
-          seed: Math.floor(Math.random() * 1_000_000),
         }),
         signal: AbortSignal.timeout(50_000),
       }
@@ -85,8 +85,11 @@ export async function generateImage(
     }
 
     lastStatus = response.status;
+    lastDetail = (await response.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
     if (![401, 402, 403, 429].includes(response.status)) break;
   }
 
-  throw new Error(`Cloudflare-Bildgenerierung fehlgeschlagen (HTTP ${lastStatus}).`);
+  throw new Error(
+    `Cloudflare-Bildgenerierung fehlgeschlagen (HTTP ${lastStatus}). ${lastDetail}`.trim()
+  );
 }
