@@ -30,6 +30,8 @@ export interface ModelDefinition {
   vision?: boolean;
   /** versteht Videos (nur sehr kleine Clips, siehe Größenlimit) */
   video?: boolean;
+  /** Live-Websuche: 'google' = Google-Suche-Werkzeug, 'builtin' = im Modell eingebaut */
+  webSearch?: 'google' | 'builtin';
 }
 
 export const MODELS = [
@@ -83,6 +85,46 @@ export const MODELS = [
     isFree: false,
     vision: true,
     video: true,
+  },
+
+  // --- Live-Websuche ----------------------------------------------------------
+  {
+    key: 'gemini-3.5-flash-lite-search',
+    label: 'Gemini 3.5 Flash-Lite + Websuche (Google)',
+    group: 'Live-Websuche',
+    provider: 'google',
+    id: 'gemini-3.5-flash-lite',
+    isFree: true,
+    vision: true,
+    webSearch: 'google',
+  },
+  {
+    key: 'gemini-3.1-flash-lite-search',
+    label: 'Gemini 3.1 Flash-Lite + Websuche (Google)',
+    group: 'Live-Websuche',
+    provider: 'google',
+    id: 'gemini-3.1-flash-lite',
+    isFree: true,
+    vision: true,
+    webSearch: 'google',
+  },
+  {
+    key: 'groq-compound',
+    label: 'Compound mit Websuche (Groq)',
+    group: 'Live-Websuche',
+    provider: 'groq',
+    id: 'groq/compound',
+    isFree: true,
+    webSearch: 'builtin',
+  },
+  {
+    key: 'groq-compound-mini',
+    label: 'Compound Mini mit Websuche (Groq, schneller)',
+    group: 'Live-Websuche',
+    provider: 'groq',
+    id: 'groq/compound-mini',
+    isFree: true,
+    webSearch: 'builtin',
   },
 
   // --- OpenAI (bezahlt) -------------------------------------------------------
@@ -308,7 +350,7 @@ export const MODELS = [
   // --- Tools ------------------------------------------------------------------
   {
     key: 'pollinations-image',
-    label: 'Bildgenerierung (Pollinations)',
+    label: 'Bildgenerierung (FLUX)',
     group: 'Tools',
     provider: 'image',
     id: 'pollinations',
