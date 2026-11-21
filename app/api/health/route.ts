@@ -66,6 +66,18 @@ const CHECKS: Record<
     url: 'https://api.cohere.com/v1/models?page_size=1',
     header: 'bearer',
   },
+  cloudflare: {
+    label: 'Cloudflare Workers AI',
+    url: `https://api.cloudflare.com/client/v4/accounts/${
+      process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || 'ACCOUNT_ID_FEHLT'
+    }/ai/models/search?per_page=1`,
+    header: 'bearer',
+  },
+  nvidia: {
+    label: 'NVIDIA NIM',
+    url: 'https://integrate.api.nvidia.com/v1/models',
+    header: 'bearer',
+  },
   openrouter: {
     label: 'OpenRouter',
     // Liefert Infos zum Key selbst, ist also der direkteste Gültigkeitstest.
