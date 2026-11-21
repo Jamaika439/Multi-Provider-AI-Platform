@@ -67,6 +67,30 @@ interface MediaFile {
   filename: string;
 }
 
+/** Regel für Songtexte (urheberrechtlich geschützt): Link statt Volltext. */
+const LYRICS_RULE =
+  'Songtexte: Gib niemals vollständige Songtexte oder lange Auszüge wieder (urheberrechtlich geschützt). Wenn jemand Lyrics möchte oder einen Song anhand einer Textzeile sucht: Nenne Titel und Künstler, gib einen Link zu den vollständigen Lyrics bei einem lizenzierten Anbieter und zitiere höchstens eine kurze Zeile (unter 10 Wörter) zur Überprüfung. Kennst du keine sichere Direkt-Adresse, nutze einen Suchlink, z. B. https://genius.com/search?q=TITEL+KÜNSTLER (Leerzeichen als +). Erfinde keine Adressen. Bei allen anderen Fragen verhalte dich ganz normal.';
+
+/** Für Modelle ohne System-Nachricht (OpenRouter Gratis): Regel vor die Nutzerfrage setzen. */
+function withRuleInUserMessage(message: ModelMessage): ModelMessage {
+  if (message.role !== 'user') return message;
+  const note = `[Hinweis an die KI: ${LYRICS_RULE}]\n\n`;
+  if (typeof message.content === 'string') {
+    return { ...message, content: note + message.content };
+  }
+  let done = false;
+  return {
+    ...message,
+    content: message.content.map((part) => {
+      if (!done && part.type === 'text') {
+        done = true;
+        return { ...part, text: note + part.text };
+      }
+      return part;
+    }),
+  };
+}
+
 /** Gesamtgröße aller Bilder/Videos pro Anfrage (Vercel erlaubt ca. 4,5 MB Body). */
 const MEDIA_MAX_CHARS = 4_000_000;
 
@@ -224,29 +248,35 @@ export async function POST(req: Request) {
     if (modelDef.key === IMAGE_MODEL || modelDef.provider === 'image') {
       const prompt =
         formattedMessages[formattedMessages.length - 1]?.content || '';
-      // 1. FLUX über Cloudflare (gespeichert, gute Qualität), 2. Ersatz: Pollinations
       let imageUrl = '';
       let imageProvider = 'pollinations';
-      try {
+
+      if (modelDef.id === 'flux') {
+        // FLUX über Cloudflare: Fehler offen anzeigen statt stillschweigend umzuschalten
         const generated = await generateImage(prompt);
-        if (generated) {
-          const imageId = await saveImage(user.id, generated.mime, generated.base64);
-          imageUrl = `/api/images/${imageId}`;
-          imageProvider = 'cloudflare';
+        if (!generated) {
+          return NextResponse.json(
+            {
+              error:
+                'FLUX braucht CLOUDFLARE_API_TOKEN (Berechtigung "Workers AI") und CLOUDFLARE_ACCOUNT_ID.',
+            },
+            { status: 400 }
+          );
         }
-      } catch (imageError) {
-        console.error('[image]', imageError);
-      }
-      if (!imageUrl) {
+        const imageId = await saveImage(user.id, generated.mime, generated.base64);
+        imageUrl = `/api/images/${imageId}`;
+        imageProvider = 'cloudflare';
+      } else {
         imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
           prompt
         )}?width=1024&height=1024&model=flux&enhance=true&nologo=true`;
       }
+
       await logUsage({
         userId: user.id,
         kind: 'image',
         provider: imageProvider,
-        model: 'flux',
+        model: modelDef.id,
       });
       const imageMarkdown = `![Generiertes Bild](${imageUrl})`;
 
@@ -292,9 +322,17 @@ export async function POST(req: Request) {
         ? ({ google_search: google.tools.googleSearch({}) } as unknown as ToolSet)
         : undefined;
 
+    // OpenRouter-Gratis-Modelle lehnen System-Nachrichten teils ab
+    const messagesForModel: ModelMessage[] =
+      !useAgent && modelDef.provider === 'openrouter'
+        ? modelMessages.map((m, index) =>
+            index === lastUserIndex ? withRuleInUserMessage(m) : m
+          )
+        : modelMessages;
+
     const result = streamText({
       model: languageModel,
-      messages: modelMessages,
+      messages: messagesForModel,
       maxOutputTokens,
       // Keine stillen Wiederholungen: Fehler sofort anzeigen statt ewig laden
       maxRetries: 0,
@@ -310,7 +348,9 @@ export async function POST(req: Request) {
             system: AGENT_SYSTEM,
             stopWhen: stepCountIs(AGENT_MAX_STEPS),
           }
-        : {}),
+        : modelDef.provider !== 'openrouter'
+          ? { system: LYRICS_RULE }
+          : {}),
       onFinish: async ({ text, steps, totalUsage }) => {
         try {
           // Im Agent-Modus steht der Text über mehrere Schritte verteilt.
