@@ -109,6 +109,25 @@ const transport = new DefaultChatTransport<UIMessage>({
   },
 });
 
+// Schnellstart-Aufträge für den GitHub-Agent (laufen im Nur-Lesen-Modus)
+const AGENT_PRESETS = [
+  {
+    label: 'Repo durchschauen',
+    prompt:
+      'Schau dir das Repository an, ohne etwas zu ändern. Nutze listFiles und lies dann package.json sowie die wichtigsten Dateien in app/ und lib/. Berichte: 1) Aufbau in fünf Sätzen, 2) mögliche Fehler oder Lücken mit Dateiname, 3) Verbesserungsvorschläge. Ändere nichts.',
+  },
+  {
+    label: 'Dateiliste erklären',
+    prompt:
+      'Liste alle Dateien im Repo auf und erkläre in je einem Satz, wofür die wichtigsten da sind. Ändere nichts.',
+  },
+  {
+    label: 'Letzte Änderungen',
+    prompt:
+      'Zeige mit fileHistory die letzten Commits der Datei app/page.tsx und fasse zusammen, was zuletzt geändert wurde. Ändere nichts.',
+  },
+];
+
 // Bilder und Videos als Anhang
 const VIDEO_MAX_BYTES = 3_000_000;
 const MEDIA_MAX_CHARS = 3_500_000;
@@ -508,6 +527,9 @@ export default function Home() {
   const [isAgentMode, setIsAgentMode] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [canAgent, setCanAgent] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [agentWrite, setAgentWrite] = useState(false);
   const router = useRouter();
 
   const isCheckingKeys = checkingMode !== null;
@@ -566,8 +588,14 @@ export default function Home() {
           router.replace('/login');
           return;
         }
-        const data = (await response.json()) as { email: string };
+        const data = (await response.json()) as {
+          email: string;
+          canAgent?: boolean;
+          isAdmin?: boolean;
+        };
         setUserEmail(data.email);
+        setCanAgent(data.canAgent === true);
+        setIsAdminUser(data.isAdmin === true);
       })
       .catch(() => {});
     return () => {
@@ -993,6 +1021,7 @@ export default function Home() {
           model: selectedModel,
           chatId,
           agent: isAgentMode && !isImageModel,
+          agentMode: agentWrite && isAdminUser ? 'write' : 'read',
         },
       }
     );
@@ -1778,10 +1807,15 @@ export default function Home() {
               {/* Agent-Modus Schalter */}
               <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white">Agent-Modus</p>
+                  <p className="text-sm font-medium text-white">GitHub-Agent</p>
                   <p className="text-[11px] text-zinc-500">
-                    Liest/ändert das Repo über GitHub (Branch agent-work)
+                    Liest das Repo über GitHub. Ändern (Branch agent-work) nur als Admin.
                   </p>
+                  {!canAgent && (
+                    <p className="text-[11px] text-amber-300">
+                      Für dein Konto nicht freigeschaltet. Der Admin kann ihn erlauben.
+                    </p>
+                  )}
                   {isImageModel && (
                     <p className="text-[11px] text-amber-300">
                       Beim Bildmodell nicht verfügbar.
@@ -1793,7 +1827,8 @@ export default function Home() {
                   role="switch"
                   aria-checked={isAgentMode}
                   onClick={() => setIsAgentMode((value) => !value)}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                  disabled={!canAgent}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-40 ${
                     isAgentMode ? 'bg-violet-600' : 'bg-zinc-700'
                   }`}
                 >
@@ -1804,6 +1839,41 @@ export default function Home() {
                   />
                 </button>
               </div>
+
+              {/* Schnellstart und Schreib-Schalter */}
+              {canAgent && (
+                <div className="space-y-2 border-b border-zinc-800 px-4 py-3">
+                  {isAdminUser && (
+                    <label className="flex items-center justify-between gap-3 text-xs text-zinc-300">
+                      <span>Änderungen erlauben (sonst nur lesen)</span>
+                      <input
+                        type="checkbox"
+                        checked={agentWrite}
+                        onChange={(event) => setAgentWrite(event.target.checked)}
+                        className="h-4 w-4 accent-violet-500"
+                      />
+                    </label>
+                  )}
+                  <p className="text-[11px] text-zinc-500">Schnellstart (nur lesen):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AGENT_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          setIsAgentMode(true);
+                          setAgentWrite(false);
+                          setInput(preset.prompt);
+                          setIsAgentOpen(false);
+                        }}
+                        className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition hover:bg-zinc-700"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Tab-Inhalt */}
               <div className="max-h-[50vh] flex-1 space-y-3 overflow-y-auto p-4">
