@@ -16,6 +16,8 @@ const ADMIN_MAX_AGE = 60 * 60 * 8; // 8 Stunden
 export interface AuthUser {
   id: string;
   email: string;
+  /** Admin hat dem Konto den (lesenden) Agent-Modus erlaubt */
+  canAgent: boolean;
 }
 
 function secret(): string {
@@ -44,6 +46,7 @@ export function ensureAuthTables(): Promise<void> {
           last_login TIMESTAMPTZ,
           blocked BOOLEAN NOT NULL DEFAULT false
         )`;
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS can_agent BOOLEAN NOT NULL DEFAULT false`;
       await sql`
         CREATE TABLE IF NOT EXISTS chat_owners (
           chat_id TEXT PRIMARY KEY,
@@ -150,12 +153,12 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
   await ensureAuthTables();
   const rows = (await sql`
-    SELECT id, email, blocked FROM users WHERE id = ${userId}
-  `) as { id: string; email: string; blocked: boolean }[];
+    SELECT id, email, blocked, can_agent FROM users WHERE id = ${userId}
+  `) as { id: string; email: string; blocked: boolean; can_agent: boolean }[];
 
   const row = rows[0];
   if (!row || row.blocked) return null;
-  return { id: row.id, email: row.email };
+  return { id: row.id, email: row.email, canAgent: row.can_agent === true };
 }
 
 // ---------------------------------------------------------------------------
