@@ -7,6 +7,7 @@ import {
 } from 'ai';
 import type { ModelMessage, ToolSet } from 'ai';
 import { google } from '@ai-sdk/google';
+import { groq } from '@ai-sdk/groq';
 import { saveChatMessages } from '@/lib/db';
 import {
   DEFAULT_MODEL,
@@ -335,7 +336,9 @@ export async function POST(req: Request) {
         : readOnlyTools
       : modelDef.webSearch === 'google'
         ? ({ google_search: google.tools.googleSearch({}) } as unknown as ToolSet)
-        : undefined;
+        : modelDef.webSearch === 'groq'
+          ? ({ browser_search: groq.tools.browserSearch({}) } as unknown as ToolSet)
+          : undefined;
 
     // OpenRouter-Gratis-Modelle lehnen System-Nachrichten teils ab
     const messagesForModel: ModelMessage[] =
