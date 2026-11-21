@@ -26,6 +26,10 @@ export interface ModelDefinition {
   id: string;
   /** true = Free-Tier / Rate-Limits, false = bezahlt */
   isFree: boolean;
+  /** versteht Bilder */
+  vision?: boolean;
+  /** versteht Videos (nur sehr kleine Clips, siehe Größenlimit) */
+  video?: boolean;
 }
 
 export const MODELS = [
@@ -37,6 +41,8 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.5-flash-lite',
     isFree: true,
+    vision: true,
+    video: true,
   },
   {
     key: 'gemini-3.1-flash-lite',
@@ -45,6 +51,8 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.1-flash-lite',
     isFree: true,
+    vision: true,
+    video: true,
   },
   {
     key: 'gemini-3.6-flash',
@@ -53,6 +61,8 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.6-flash',
     isFree: true,
+    vision: true,
+    video: true,
   },
   {
     key: 'gemini-3.8-flash',
@@ -61,6 +71,8 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.8-flash',
     isFree: true,
+    vision: true,
+    video: true,
   },
   {
     key: 'gemini-3.1-pro',
@@ -69,6 +81,8 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.1-pro-preview',
     isFree: false,
+    vision: true,
+    video: true,
   },
 
   // --- OpenAI (bezahlt) -------------------------------------------------------
@@ -79,6 +93,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-luna',
     isFree: false,
+    vision: true,
   },
   {
     key: 'gpt-6.1-sol',
@@ -87,6 +102,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6.1-sol',
     isFree: false,
+    vision: true,
   },
   {
     key: 'gpt-6-astra',
@@ -95,6 +111,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-astra',
     isFree: false,
+    vision: true,
   },
 
   // --- Groq -------------------------------------------------------------------
@@ -151,6 +168,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
     isFree: true,
+    vision: true,
   },
   {
     key: 'nvidia-minimax-m31-flash',
@@ -199,6 +217,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'meta/muse-glimmer-30b',
     isFree: true,
+    vision: true,
   },
 
   // --- Cloudflare Workers AI (Gratis, braucht CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)
@@ -243,6 +262,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3.5-super-vl:free',
     isFree: true,
+    vision: true,
   },
   {
     key: 'openrouter-nemotron-35-lightning',
