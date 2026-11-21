@@ -12,6 +12,7 @@ interface UserRow {
   created_at: string;
   last_login: string | null;
   blocked: boolean;
+  can_agent: boolean;
   chat_count: number;
   requests_total: number;
   requests_today: number;
@@ -35,7 +36,7 @@ export async function GET() {
     await ensureUsageTable();
 
     const users = (await sql`
-      SELECT u.id, u.email, u.created_at, u.last_login, u.blocked,
+      SELECT u.id, u.email, u.created_at, u.last_login, u.blocked, u.can_agent,
         (SELECT COUNT(*) FROM chat_owners o WHERE o.user_id = u.id)::int AS chat_count,
         (SELECT COUNT(*) FROM usage_log l WHERE l.user_id = u.id)::int AS requests_total,
         (SELECT COUNT(*) FROM usage_log l
@@ -78,19 +79,28 @@ export async function GET() {
   }
 }
 
-/** PATCH /api/admin/users  { id, blocked }: Konto sperren/entsperren */
+/** PATCH /api/admin/users  { id, blocked? , canAgent? }: sperren/entsperren, Agent erlauben */
 export async function PATCH(req: Request) {
   if (!(await isAdmin())) return deny();
 
   const body = (await req.json().catch(() => ({}))) as {
     id?: unknown;
     blocked?: unknown;
+    canAgent?: unknown;
   };
-  if (typeof body.id !== 'string' || typeof body.blocked !== 'boolean') {
+  if (
+    typeof body.id !== 'string' ||
+    (typeof body.blocked !== 'boolean' && typeof body.canAgent !== 'boolean')
+  ) {
     return NextResponse.json({ error: 'Ungültige Anfrage' }, { status: 400 });
   }
 
-  await sql`UPDATE users SET blocked = ${body.blocked} WHERE id = ${body.id}`;
+  if (typeof body.blocked === 'boolean') {
+    await sql`UPDATE users SET blocked = ${body.blocked} WHERE id = ${body.id}`;
+  }
+  if (typeof body.canAgent === 'boolean') {
+    await sql`UPDATE users SET can_agent = ${body.canAgent} WHERE id = ${body.id}`;
+  }
   return NextResponse.json({ ok: true });
 }
 
