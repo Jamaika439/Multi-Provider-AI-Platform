@@ -9,8 +9,27 @@ interface UserRow {
   created_at: string;
   last_login: string | null;
   blocked: boolean;
+  can_agent?: boolean;
   chat_count: number;
+  requests_total: number;
+  requests_today: number;
+  tokens_total: number;
+  tokens_today: number;
+  images_today: number;
 }
+
+interface ProviderRow {
+  provider: string;
+  requests_today: number;
+  tokens_today: number;
+}
+
+interface AdminData {
+  users: UserRow[];
+  providers: ProviderRow[];
+}
+
+const num = (value: number | undefined) => (value ?? 0).toLocaleString('de-DE');
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString('de-DE') : '–';
@@ -19,6 +38,7 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [password, setPassword] = useState('');
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -31,7 +51,10 @@ export default function AdminPage() {
       setError('Die Liste konnte nicht geladen werden.');
       return;
     }
-    setUsers((await response.json()) as UserRow[]);
+    // Toleriert auch das alte Antwortformat (nur eine Liste)
+    const data = (await response.json()) as AdminData | UserRow[];
+    setUsers(Array.isArray(data) ? data : (data.users ?? []));
+    setProviders(Array.isArray(data) ? [] : (data.providers ?? []));
     setAuthed(true);
   }, []);
 
@@ -48,7 +71,9 @@ export default function AdminPage() {
           setError('Die Liste konnte nicht geladen werden.');
           return;
         }
-        setUsers((await response.json()) as UserRow[]);
+        const data = (await response.json()) as AdminData | UserRow[];
+        setUsers(Array.isArray(data) ? data : (data.users ?? []));
+        setProviders(Array.isArray(data) ? [] : (data.providers ?? []));
         setAuthed(true);
       })
       .catch(() => {
@@ -80,6 +105,7 @@ export default function AdminPage() {
   const logout = async () => {
     await fetch('/api/admin/login', { method: 'DELETE' });
     setUsers([]);
+    setProviders([]);
     setAuthed(false);
   };
 
@@ -88,6 +114,15 @@ export default function AdminPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: user.id, blocked }),
+    });
+    await load();
+  };
+
+  const setAgent = async (user: UserRow, canAgent: boolean) => {
+    await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: user.id, canAgent }),
     });
     await load();
   };
@@ -158,6 +193,27 @@ export default function AdminPage() {
 
         {error && <p className="text-sm text-red-300">{error}</p>}
 
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Verbrauch heute je Anbieter (Tag = UTC)
+          </p>
+          {providers.length === 0 ? (
+            <p className="text-xs text-zinc-500">Heute noch keine Anfragen.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2 text-xs">
+              {providers.map((row) => (
+                <span
+                  key={row.provider}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-300"
+                >
+                  <span className="font-medium text-zinc-100">{row.provider}</span>:{' '}
+                  {num(row.requests_today)} Anfragen, {num(row.tokens_today)} Tokens
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="overflow-x-auto rounded-xl border border-zinc-800">
           <table className="w-full text-left text-xs">
             <thead className="bg-zinc-900 text-zinc-400">
@@ -165,7 +221,15 @@ export default function AdminPage() {
                 <th className="px-3 py-2">E-Mail</th>
                 <th className="px-3 py-2">Registriert</th>
                 <th className="px-3 py-2">Letzter Login</th>
+                <th className="px-3 py-2">Heute</th>
+                <th className="px-3 py-2">Gesamt</th>
                 <th className="px-3 py-2">Chats</th>
+                <th
+                  className="px-3 py-2"
+                  title="Erlaubt den GitHub-Agent im Nur-Lesen-Modus (Repo ansehen). Ändern darf nur der Admin."
+                >
+                  Agent (lesen)
+                </th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2 text-right">Aktionen</th>
               </tr>
@@ -179,7 +243,23 @@ export default function AdminPage() {
                   </td>
                   <td className="px-3 py-2 text-zinc-400">{formatDate(user.created_at)}</td>
                   <td className="px-3 py-2 text-zinc-400">{formatDate(user.last_login)}</td>
+                  <td className="px-3 py-2 text-zinc-300">
+                    {num(user.requests_today)} Anfr. · {num(user.tokens_today)} Tokens
+                    {user.images_today > 0 && ` · ${num(user.images_today)} Bilder`}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-400">
+                    {num(user.requests_total)} Anfr. · {num(user.tokens_total)} Tokens
+                  </td>
                   <td className="px-3 py-2">{user.chat_count}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={user.can_agent === true}
+                      onChange={(event) => void setAgent(user, event.target.checked)}
+                      aria-label={`Agent für ${user.email} erlauben`}
+                      className="h-4 w-4 accent-violet-500"
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     {user.blocked ? (
                       <span className="text-red-400">gesperrt</span>
@@ -207,7 +287,7 @@ export default function AdminPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-zinc-500">
+                  <td colSpan={9} className="px-3 py-6 text-center text-zinc-500">
                     Noch keine Konten.
                   </td>
                 </tr>
