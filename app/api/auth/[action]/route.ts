@@ -5,6 +5,7 @@ import {
   endSession,
   ensureAuthTables,
   getCurrentUser,
+  isAdmin,
   hashPassword,
   startSession,
   tooManyAttempts,
@@ -26,7 +27,13 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const user = await getCurrentUser();
   if (!user) return fail('Nicht eingeloggt', 401);
-  return NextResponse.json({ id: user.id, email: user.email });
+  const admin = await isAdmin();
+  return NextResponse.json({
+    id: user.id,
+    email: user.email,
+    isAdmin: admin,
+    canAgent: admin || user.canAgent,
+  });
 }
 
 /** POST /api/auth/register | login | logout */
