@@ -436,8 +436,24 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   );
 }
 
+function ExternalLink({ url, label }: { url: string; label: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="break-all text-indigo-300 underline decoration-indigo-300/40 transition hover:text-indigo-200"
+    >
+      {label}
+    </a>
+  );
+}
+
 function InlineText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`\n]+`)/g);
+  // fett, Code, [Text](https://…) und lose https://…-Adressen
+  const parts = text.split(
+    /(\*\*[^*]+\*\*|`[^`\n]+`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s<>()[\]]+)/g
+  );
 
   return (
     <span className="whitespace-pre-wrap">
@@ -453,6 +469,19 @@ function InlineText({ text }: { text: string }) {
             >
               {part.slice(1, -1)}
             </code>
+          );
+        }
+        const markdownLink = part.match(/^\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)$/);
+        if (markdownLink) {
+          return <ExternalLink key={index} url={markdownLink[2]} label={markdownLink[1]} />;
+        }
+        if (/^https?:\/\//.test(part)) {
+          const url = part.replace(/[.,;:!?]+$/, '');
+          return (
+            <span key={index}>
+              <ExternalLink url={url} label={url} />
+              {part.slice(url.length)}
+            </span>
           );
         }
         return part;
