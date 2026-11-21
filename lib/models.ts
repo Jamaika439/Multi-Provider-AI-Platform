@@ -349,8 +349,16 @@ export const MODELS = [
 
   // --- Tools ------------------------------------------------------------------
   {
+    key: 'flux-image',
+    label: 'Bildgenerierung FLUX (besser, Cloudflare)',
+    group: 'Tools',
+    provider: 'image',
+    id: 'flux',
+    isFree: true,
+  },
+  {
     key: 'pollinations-image',
-    label: 'Bildgenerierung (FLUX)',
+    label: 'Bildgenerierung Pollinations (mit Wasserzeichen)',
     group: 'Tools',
     provider: 'image',
     id: 'pollinations',
@@ -362,7 +370,7 @@ export type ModelKey = (typeof MODELS)[number]['key'];
 
 // Standardmodell: schnell und im Free-Tier zuverlässig
 export const DEFAULT_MODEL: ModelKey = 'gemini-3.5-flash-lite';
-export const IMAGE_MODEL: ModelKey = 'pollinations-image';
+export const IMAGE_MODEL: ModelKey = 'flux-image';
 
 export function findModel(key: unknown): ModelDefinition | undefined {
   return MODELS.find((model) => model.key === key);
