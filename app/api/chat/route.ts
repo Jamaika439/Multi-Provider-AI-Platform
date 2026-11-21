@@ -91,6 +91,17 @@ function withRuleInUserMessage(message: ModelMessage): ModelMessage {
   };
 }
 
+/** Nur-Lesen-Werkzeuge für Konten ohne Schreibrecht und für "Repo durchschauen". */
+const readOnlyTools = {
+  listFiles: agentTools.listFiles,
+  readFile: agentTools.readFile,
+  fileHistory: agentTools.fileHistory,
+  searchCode: agentTools.searchCode,
+} as unknown as ToolSet;
+
+const READ_ONLY_NOTE =
+  '\n\nWICHTIG: In diesem Lauf darfst du NICHTS ändern. Du hast nur Lese-Werkzeuge. Lies, analysiere und berichte.';
+
 /** Gesamtgröße aller Bilder/Videos pro Anfrage (Vercel erlaubt ca. 4,5 MB Body). */
 const MEDIA_MAX_CHARS = 4_000_000;
 
@@ -143,7 +154,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { messages, chatId, model: modelKey, agent } = body;
+    const { messages, chatId, model: modelKey, agent, agentMode } = body;
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
@@ -163,12 +174,14 @@ export async function POST(req: Request) {
         { status: 403 }
       );
     }
-    if (agent === true && !admin) {
+    // Agent: Admin darf lesen und ändern. Konten mit Haken im Admin-Bereich dürfen nur lesen.
+    if (agent === true && !admin && !user.canAgent) {
       return NextResponse.json(
-        { error: 'Der Agent-Modus ist nur für den Admin (zuerst unter /admin anmelden).' },
+        { error: 'Der Agent-Modus ist für dein Konto nicht freigeschaltet. Der Admin kann ihn im Admin-Bereich erlauben.' },
         { status: 403 }
       );
     }
+    const agentWrite = admin && agentMode === 'write';
 
     // Bilder/Videos: Kann das gewählte Modell sie nicht, wird automatisch ein passendes genommen
     const media = extractMedia(messages as IncomingMessage[]);
@@ -317,7 +330,9 @@ export async function POST(req: Request) {
 
     // Agent: Repo-Werkzeuge. Websuche-Modelle: Google-Suche (Gemini) bzw. eingebaut (Groq Compound).
     const activeTools: ToolSet | undefined = useAgent
-      ? agentTools
+      ? agentWrite
+        ? agentTools
+        : readOnlyTools
       : modelDef.webSearch === 'google'
         ? ({ google_search: google.tools.googleSearch({}) } as unknown as ToolSet)
         : undefined;
@@ -345,7 +360,7 @@ export async function POST(req: Request) {
       ...(activeTools ? { tools: activeTools } : {}),
       ...(useAgent
         ? {
-            system: AGENT_SYSTEM,
+            system: agentWrite ? AGENT_SYSTEM : AGENT_SYSTEM + READ_ONLY_NOTE,
             stopWhen: stepCountIs(AGENT_MAX_STEPS),
           }
         : modelDef.provider !== 'openrouter'
