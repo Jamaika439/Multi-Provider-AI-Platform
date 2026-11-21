@@ -5,10 +5,22 @@ import {
   stepCountIs,
   streamText,
 } from 'ai';
+import type { ModelMessage } from 'ai';
 import { saveChatMessages } from '@/lib/db';
-import { DEFAULT_MODEL, findModel, IMAGE_MODEL } from '@/lib/models';
-import { getLanguageModel, MissingApiKeyError } from '@/lib/providers';
-import { getMessageText, makeChatTitle } from '@/lib/messages';
+import {
+  DEFAULT_MODEL,
+  findModel,
+  IMAGE_MODEL,
+  MODELS,
+  type ModelDefinition,
+} from '@/lib/models';
+import {
+  getLanguageModel,
+  getProviderKeys,
+  MissingApiKeyError,
+  type KeyedProvider,
+} from '@/lib/providers';
+import { ATTACHMENT_MARKER, getMessageText, makeChatTitle } from '@/lib/messages';
 import { agentTools, AGENT_SYSTEM } from '@/lib/agents/tools';
 import { claimChat, getCurrentUser, isAdmin } from '@/lib/auth';
 
@@ -37,7 +49,63 @@ const AGENT_MAX_STEPS = 15;
 interface IncomingMessage {
   role?: string;
   content?: unknown;
-  parts?: readonly { type: string; text?: unknown }[];
+  parts?: readonly {
+    type: string;
+    text?: unknown;
+    mediaType?: string;
+    url?: string;
+    filename?: string;
+  }[];
+}
+
+interface MediaFile {
+  mediaType: string;
+  url: string;
+  filename: string;
+}
+
+/** Gesamtgröße aller Bilder/Videos pro Anfrage (Vercel erlaubt ca. 4,5 MB Body). */
+const MEDIA_MAX_CHARS = 4_000_000;
+
+/** Bilder/Videos der letzten Nutzernachricht. Nur eingebettete Data-URLs (keine Fremdadressen). */
+function extractMedia(messages: IncomingMessage[]): MediaFile[] {
+  const last = [...messages].reverse().find((m) => m.role === 'user');
+  if (!last || !Array.isArray(last.parts)) return [];
+
+  return last.parts
+    .filter(
+      (part) =>
+        part.type === 'file' &&
+        typeof part.url === 'string' &&
+        part.url.startsWith('data:') &&
+        typeof part.mediaType === 'string' &&
+        (part.mediaType.startsWith('image/') || part.mediaType.startsWith('video/'))
+    )
+    .map((part) => ({
+      mediaType: part.mediaType as string,
+      url: part.url as string,
+      filename: part.filename ?? 'Anhang',
+    }));
+}
+
+/** Erstes Modell mit Bild-/Video-Unterstützung, für das ein Key eingetragen ist. */
+function pickMediaModel(needVideo: boolean, admin: boolean): ModelDefinition | undefined {
+  return (MODELS as readonly ModelDefinition[]).find(
+    (model) =>
+      model.provider !== 'image' &&
+      (needVideo ? model.video : model.vision) &&
+      (model.isFree || admin) &&
+      getProviderKeys(model.provider as KeyedProvider).length > 0
+  );
+}
+
+/** Vermerk für die Datenbank: Medien selbst werden nicht gespeichert. */
+function withMediaNote(text: string, media: MediaFile[]): string {
+  const header = text.includes(ATTACHMENT_MARKER) ? '' : `\n\n${ATTACHMENT_MARKER}\n`;
+  const lines = media
+    .map((file) => `\n--- Datei: ${file.filename} ---\n(Medien werden nicht gespeichert)\n--- Ende der Datei ---`)
+    .join('');
+  return `${text}${header}${lines}`;
 }
 
 export async function POST(req: Request) {
@@ -57,7 +125,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const modelDef = findModel(modelKey) ?? findModel(DEFAULT_MODEL)!;
+    let modelDef = findModel(modelKey) ?? findModel(DEFAULT_MODEL)!;
     const activeChatId = chatId || `chat-${Date.now()}`;
 
     // Bezahlte Modelle und der Agent-Modus (schreibt ins Repo) nur für den Admin
@@ -73,6 +141,32 @@ export async function POST(req: Request) {
         { error: 'Der Agent-Modus ist nur für den Admin (zuerst unter /admin anmelden).' },
         { status: 403 }
       );
+    }
+
+    // Bilder/Videos: Kann das gewählte Modell sie nicht, wird automatisch ein passendes genommen
+    const media = extractMedia(messages as IncomingMessage[]);
+    if (media.reduce((sum, file) => sum + file.url.length, 0) > MEDIA_MAX_CHARS) {
+      return NextResponse.json(
+        { error: 'Bilder und Videos sind zusammen zu groß (maximal ca. 3 MB).' },
+        { status: 413 }
+      );
+    }
+    if (media.length > 0 && modelDef.provider !== 'image') {
+      const needVideo = media.some((file) => file.mediaType.startsWith('video/'));
+      if (!(needVideo ? modelDef.video : modelDef.vision)) {
+        const alternative = pickMediaModel(needVideo, admin);
+        if (!alternative) {
+          return NextResponse.json(
+            {
+              error: needVideo
+                ? 'Kein Modell mit Video-Unterstützung verfügbar (Google-Key fehlt?).'
+                : 'Kein Modell mit Bild-Unterstützung verfügbar (Google- oder NVIDIA-Key fehlt?).',
+            },
+            { status: 400 }
+          );
+        }
+        modelDef = alternative;
+      }
     }
 
     // Chat dem Nutzer zuordnen; fremde Chat-IDs werden abgelehnt
@@ -93,6 +187,30 @@ export async function POST(req: Request) {
         content: typeof content === 'string' ? content : String(content || ''),
       };
     });
+
+    // Für das Modell: letzte Nutzernachricht inkl. Bilder/Videos
+    const lastUserIndex = formattedMessages.map((m) => m.role).lastIndexOf('user');
+    const modelMessages: ModelMessage[] = formattedMessages.map((m, index) =>
+      media.length > 0 && index === lastUserIndex
+        ? {
+            role: 'user' as const,
+            content: [
+              { type: 'text' as const, text: m.content },
+              ...media.map((file) =>
+                file.mediaType.startsWith('image/')
+                  ? { type: 'image' as const, image: file.url, mediaType: file.mediaType }
+                  : { type: 'file' as const, data: file.url, mediaType: file.mediaType }
+              ),
+            ],
+          }
+        : m
+    );
+    // Für die Datenbank: nur Text plus Hinweis auf die Anhänge
+    const savedMessages = formattedMessages.map((m, index) =>
+      media.length > 0 && index === lastUserIndex
+        ? { ...m, content: withMediaNote(m.content, media) }
+        : m
+    );
 
     const firstUserText =
       formattedMessages.find((m: { role: string }) => m.role === 'user')
@@ -145,7 +263,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: languageModel,
-      messages: formattedMessages,
+      messages: modelMessages,
       maxOutputTokens,
       // Keine stillen Wiederholungen: Fehler sofort anzeigen statt ewig laden
       maxRetries: 0,
@@ -173,7 +291,7 @@ export async function POST(req: Request) {
             : text;
 
           await saveChatMessages(activeChatId, activeTitle, [
-            ...formattedMessages,
+            ...savedMessages,
             { role: 'assistant', content: finalText || '' },
           ]);
         } catch (dbError) {
