@@ -94,7 +94,7 @@ const FILE_MAX_CHARS = 30_000;
 const TOTAL_FILE_MAX_CHARS = 80_000;
 
 const IMAGE_MARKDOWN =
-  /!\[[^\]]*\]\((https:\/\/image\.pollinations\.ai\/[^)\s]+)\)/;
+  /!\[[^\]]*\]\(((?:https:\/\/image\.pollinations\.ai|\/api\/images)\/[^)\s]+)\)/;
 
 // Bilder/Videos nur in der letzten Nachricht mitschicken (sonst sprengt der Verlauf das Größenlimit)
 const transport = new DefaultChatTransport<UIMessage>({
@@ -168,6 +168,31 @@ function getFileParts(message: UIMessage): FilePartInfo[] {
       url: p.url as string,
       name: typeof p.filename === 'string' ? p.filename : 'Anhang',
     }));
+}
+
+function getSourceParts(
+  message: UIMessage
+): { key: string; url: string; title: string }[] {
+  const parts = (message.parts ?? []) as unknown as Array<Record<string, unknown>>;
+  const seen = new Set<string>();
+  const result: { key: string; url: string; title: string }[] = [];
+
+  for (const part of parts) {
+    if (
+      part.type === 'source-url' &&
+      typeof part.url === 'string' &&
+      /^https?:\/\//.test(part.url) &&
+      !seen.has(part.url)
+    ) {
+      seen.add(part.url);
+      result.push({
+        key: part.url,
+        url: part.url,
+        title: typeof part.title === 'string' && part.title ? part.title : part.url,
+      });
+    }
+  }
+  return result.slice(0, 8);
 }
 
 function MediaThumb({
@@ -249,7 +274,8 @@ function GeneratedImage({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   const autoRetried = useRef(false);
 
-  const src = attempt === 0 ? url : `${url}&retry=${attempt}`;
+  const src =
+    attempt === 0 ? url : `${url}${url.includes('?') ? '&' : '?'}retry=${attempt}`;
 
   const handleError = () => {
     if (!autoRetried.current) {
@@ -1320,6 +1346,7 @@ export default function Home() {
 
               const toolParts = isUser ? [] : getToolParts(message);
               const fileParts = isUser ? getFileParts(message) : [];
+              const sources = isUser ? [] : getSourceParts(message);
 
               // Leere Blasen vermeiden (z. B. Reasoning-Schritte ohne Text)
               if (
@@ -1411,6 +1438,26 @@ export default function Home() {
                     {!isUser && displayText.length > 300 && (
                       <div className="mt-2 flex justify-end">
                         <CopyButton text={displayText} />
+                      </div>
+                    )}
+
+                    {sources.length > 0 && (
+                      <div className="mt-3 border-t border-zinc-800 pt-2 text-[11px] text-zinc-400">
+                        <p className="mb-1">Quellen</p>
+                        <ul className="space-y-0.5">
+                          {sources.map((source) => (
+                            <li key={source.key} className="truncate">
+                              <a
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-300 hover:underline"
+                              >
+                                {source.title}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 
