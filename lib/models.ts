@@ -14,6 +14,8 @@ export type ProviderName =
   | 'groq'
   | 'cohere'
   | 'openrouter'
+  | 'nvidia'
+  | 'cloudflare'
   | 'image';
 
 export interface ModelDefinition {
@@ -120,6 +122,42 @@ export const MODELS = [
     group: 'Cohere',
     provider: 'cohere',
     id: 'command-a-03-2025',
+    isFree: true,
+  },
+
+  // --- NVIDIA NIM (Gratis, braucht NVIDIA_API_KEY) -----------------------------
+  {
+    key: 'nvidia-gpt-oss-20b',
+    label: 'GPT-OSS 20B (NVIDIA)',
+    group: 'NVIDIA NIM (Gratis)',
+    provider: 'nvidia',
+    id: 'openai/gpt-oss-20b',
+    isFree: true,
+  },
+  {
+    key: 'nvidia-nemotron-super',
+    label: 'Nemotron 3 Super 120B (NVIDIA)',
+    group: 'NVIDIA NIM (Gratis)',
+    provider: 'nvidia',
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    isFree: true,
+  },
+
+  // --- Cloudflare Workers AI (Gratis, braucht CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)
+  {
+    key: 'cloudflare-llama-4-scout',
+    label: 'Llama 4 Scout (Cloudflare)',
+    group: 'Cloudflare Workers AI (Gratis)',
+    provider: 'cloudflare',
+    id: '@cf/meta/llama-4-scout-17b-16e-instruct',
+    isFree: true,
+  },
+  {
+    key: 'cloudflare-gpt-oss-120b',
+    label: 'GPT-OSS 120B (Cloudflare)',
+    group: 'Cloudflare Workers AI (Gratis)',
+    provider: 'cloudflare',
+    id: '@cf/openai/gpt-oss-120b',
     isFree: true,
   },
 
