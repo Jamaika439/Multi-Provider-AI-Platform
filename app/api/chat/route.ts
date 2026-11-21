@@ -5,7 +5,8 @@ import {
   stepCountIs,
   streamText,
 } from 'ai';
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, ToolSet } from 'ai';
+import { google } from '@ai-sdk/google';
 import { saveChatMessages } from '@/lib/db';
 import {
   DEFAULT_MODEL,
@@ -22,6 +23,8 @@ import {
 } from '@/lib/providers';
 import { ATTACHMENT_MARKER, getMessageText, makeChatTitle } from '@/lib/messages';
 import { agentTools, AGENT_SYSTEM } from '@/lib/agents/tools';
+import { generateImage, saveImage } from '@/lib/images';
+import { logUsage } from '@/lib/usage';
 import { claimChat, getCurrentUser, isAdmin } from '@/lib/auth';
 
 // Maximale Laufzeit einer Anfrage in Sekunden (muss ein fester Wert sein).
@@ -221,9 +224,30 @@ export async function POST(req: Request) {
     if (modelDef.key === IMAGE_MODEL || modelDef.provider === 'image') {
       const prompt =
         formattedMessages[formattedMessages.length - 1]?.content || '';
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-        prompt
-      )}?width=1024&height=1024&nologo=true`;
+      // 1. FLUX über Cloudflare (gespeichert, gute Qualität), 2. Ersatz: Pollinations
+      let imageUrl = '';
+      let imageProvider = 'pollinations';
+      try {
+        const generated = await generateImage(prompt);
+        if (generated) {
+          const imageId = await saveImage(user.id, generated.mime, generated.base64);
+          imageUrl = `/api/images/${imageId}`;
+          imageProvider = 'cloudflare';
+        }
+      } catch (imageError) {
+        console.error('[image]', imageError);
+      }
+      if (!imageUrl) {
+        imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+          prompt
+        )}?width=1024&height=1024&model=flux&enhance=true&nologo=true`;
+      }
+      await logUsage({
+        userId: user.id,
+        kind: 'image',
+        provider: imageProvider,
+        model: 'flux',
+      });
       const imageMarkdown = `![Generiertes Bild](${imageUrl})`;
 
       await saveChatMessages(activeChatId, activeTitle, [
@@ -261,6 +285,13 @@ export async function POST(req: Request) {
     const maxOutputTokens =
       OUTPUT_LIMITS[modelDef.provider] ?? DEFAULT_OUTPUT_LIMIT;
 
+    // Agent: Repo-Werkzeuge. Websuche-Modelle: Google-Suche (Gemini) bzw. eingebaut (Groq Compound).
+    const activeTools: ToolSet | undefined = useAgent
+      ? agentTools
+      : modelDef.webSearch === 'google'
+        ? ({ google_search: google.tools.googleSearch({}) } as unknown as ToolSet)
+        : undefined;
+
     const result = streamText({
       model: languageModel,
       messages: modelMessages,
@@ -273,14 +304,14 @@ export async function POST(req: Request) {
       onError: ({ error }) => {
         console.error('[streamText]', error);
       },
+      ...(activeTools ? { tools: activeTools } : {}),
       ...(useAgent
         ? {
             system: AGENT_SYSTEM,
-            tools: agentTools,
             stopWhen: stepCountIs(AGENT_MAX_STEPS),
           }
         : {}),
-      onFinish: async ({ text, steps }) => {
+      onFinish: async ({ text, steps, totalUsage }) => {
         try {
           // Im Agent-Modus steht der Text über mehrere Schritte verteilt.
           const finalText = useAgent
@@ -297,11 +328,21 @@ export async function POST(req: Request) {
         } catch (dbError) {
           console.error('Fehler beim Speichern in Neon:', dbError);
         }
+
+        await logUsage({
+          userId: user.id,
+          kind: 'chat',
+          provider: modelDef.provider,
+          model: modelDef.key,
+          inputTokens: totalUsage?.inputTokens,
+          outputTokens: totalUsage?.outputTokens,
+        });
       },
     });
 
     // Echte Fehlermeldung des Anbieters anzeigen (statt "An error occurred.")
     return result.toUIMessageStreamResponse({
+      sendSources: true,
       onError: (error) =>
         (error instanceof Error ? error.message : String(error)).slice(0, 300),
     });
