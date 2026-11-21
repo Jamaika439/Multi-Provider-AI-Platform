@@ -49,6 +49,7 @@ import {
   IMAGE_MODEL,
   MODELS,
   getModelGroups,
+  type ModelDefinition,
   type ModelKey,
 } from '@/lib/models';
 
@@ -85,39 +86,6 @@ interface AttachedFile {
   truncated: boolean;
 }
 
-interface SpeechRecognitionEventLike {
-  results: {
-    [index: number]: {
-      [index: number]: {
-        transcript: string;
-      };
-    };
-  };
-}
-
-interface SpeechRecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionLike;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
-
 // =============================================================================
 // 2. Konstanten
 // =============================================================================
@@ -128,7 +96,103 @@ const TOTAL_FILE_MAX_CHARS = 80_000;
 const IMAGE_MARKDOWN =
   /!\[[^\]]*\]\((https:\/\/image\.pollinations\.ai\/[^)\s]+)\)/;
 
-const transport = new DefaultChatTransport({ api: '/api/chat' });
+// Bilder/Videos nur in der letzten Nachricht mitschicken (sonst sprengt der Verlauf das Größenlimit)
+const transport = new DefaultChatTransport<UIMessage>({
+  api: '/api/chat',
+  prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => {
+    const lastIndex = messages.length - 1;
+    const slimMessages = messages.map((message, index) =>
+      index === lastIndex
+        ? message
+        : { ...message, parts: message.parts.filter((part) => part.type !== 'file') }
+    );
+    return { body: { ...body, id, messages: slimMessages, trigger, messageId } };
+  },
+});
+
+// Bilder und Videos als Anhang
+const VIDEO_MAX_BYTES = 3_000_000;
+const MEDIA_MAX_CHARS = 3_500_000;
+const MAX_MEDIA_COUNT = 4;
+
+interface AttachedMedia {
+  name: string;
+  mediaType: string;
+  url: string;
+}
+
+/** Verkleinert ein Bild auf maximal 1280 Pixel (JPEG) und gibt eine Data-URL zurück. */
+async function imageToDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas nicht verfügbar');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+interface FilePartInfo {
+  key: string;
+  mediaType: string;
+  url: string;
+  name: string;
+}
+
+function getFileParts(message: UIMessage): FilePartInfo[] {
+  const parts = (message.parts ?? []) as unknown as Array<Record<string, unknown>>;
+  return parts
+    .filter(
+      (p) =>
+        p.type === 'file' &&
+        typeof p.url === 'string' &&
+        typeof p.mediaType === 'string'
+    )
+    .map((p, index) => ({
+      key: String(index),
+      mediaType: p.mediaType as string,
+      url: p.url as string,
+      name: typeof p.filename === 'string' ? p.filename : 'Anhang',
+    }));
+}
+
+function MediaThumb({
+  mediaType,
+  url,
+  name,
+  className,
+  controls = false,
+}: {
+  mediaType: string;
+  url: string;
+  name: string;
+  className: string;
+  controls?: boolean;
+}) {
+  if (mediaType.startsWith('video/')) {
+    return <video src={url} controls={controls} muted={!controls} className={className} />;
+  }
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={name} className={className} />
+    </>
+  );
+}
 
 function createChatId() {
   return `chat-${crypto.randomUUID()}`;
@@ -401,6 +465,9 @@ export default function Home() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [attachedMedia, setAttachedMedia] = useState<AttachedMedia[]>([]);
+  const [keysOpen, setKeysOpen] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [keyResults, setKeyResults] = useState<KeyCheckResult[] | null>(null);
   const [checkingMode, setCheckingMode] = useState<'normal' | 'deep' | null>(
@@ -424,7 +491,8 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchChats = useCallback(async () => {
     try {
@@ -452,6 +520,13 @@ export default function Home() {
   const isImageModel = selectedModel === IMAGE_MODEL;
   const selectedModelDef = MODELS.find((model) => model.key === selectedModel);
   const selectedModelLabel = selectedModelDef?.label ?? '';
+  const selectedCaps = selectedModelDef as ModelDefinition | undefined;
+  const mediaNeedsVideo = attachedMedia.some((media) =>
+    media.mediaType.startsWith('video/')
+  );
+  const mediaUnsupported =
+    attachedMedia.length > 0 &&
+    !(mediaNeedsVideo ? selectedCaps?.video : selectedCaps?.vision);
   const modelGroups = getModelGroups(onlyFree);
   const shownError = errorMessage || error?.message || '';
 
@@ -528,7 +603,13 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
-      recognitionRef.current?.stop();
+      if (recordTimerRef.current) clearTimeout(recordTimerRef.current);
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.onstop = null;
+        recorder.stop();
+        recorder.stream.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []);
 
@@ -547,6 +628,7 @@ export default function Home() {
   const resetComposer = () => {
     setInput('');
     setAttachedFiles([]);
+    setAttachedMedia([]);
     setErrorMessage('');
     clearError();
   };
@@ -578,6 +660,7 @@ export default function Home() {
       setMessages(restored);
       setInput('');
       setAttachedFiles([]);
+      setAttachedMedia([]);
     } catch (loadError) {
       console.error('Fehler beim Laden des Chats:', loadError);
       setErrorMessage('Der Chat konnte nicht geladen werden.');
@@ -621,16 +704,41 @@ export default function Home() {
 
     const notices: string[] = [];
     const accepted: AttachedFile[] = [];
+    const acceptedMedia: AttachedMedia[] = [];
+    let mediaChars = attachedMedia.reduce((total, media) => total + media.url.length, 0);
     let totalChars = attachedFiles.reduce(
       (total, file) => total + file.content.length,
       0
     );
 
     for (const file of Array.from(fileList)) {
-      if (file.type.startsWith('image/')) {
-        notices.push(
-          `${file.name}: Bilder werden momentan nicht als Textdatei verarbeitet.`
-        );
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        const isVideo = file.type.startsWith('video/');
+
+        if (attachedMedia.length + acceptedMedia.length >= MAX_MEDIA_COUNT) {
+          notices.push(`Es sind höchstens ${MAX_MEDIA_COUNT} Bilder/Videos pro Nachricht möglich.`);
+          continue;
+        }
+        if (isVideo && file.size > VIDEO_MAX_BYTES) {
+          notices.push(`${file.name}: Das Video ist zu groß (maximal 3 MB).`);
+          continue;
+        }
+
+        try {
+          const url = isVideo ? await fileToDataUrl(file) : await imageToDataUrl(file);
+          if (mediaChars + url.length > MEDIA_MAX_CHARS) {
+            notices.push(`${file.name}: Bilder und Videos dürfen zusammen höchstens ca. 3 MB groß sein.`);
+            continue;
+          }
+          mediaChars += url.length;
+          acceptedMedia.push({
+            name: file.name,
+            mediaType: isVideo ? file.type : 'image/jpeg',
+            url,
+          });
+        } catch {
+          notices.push(`${file.name} konnte nicht gelesen werden.`);
+        }
         continue;
       }
 
@@ -670,7 +778,16 @@ export default function Home() {
     if (accepted.length > 0) {
       setAttachedFiles((previousFiles) => [...previousFiles, ...accepted]);
     }
+    if (acceptedMedia.length > 0) {
+      setAttachedMedia((previousMedia) => [...previousMedia, ...acceptedMedia]);
+    }
     setErrorMessage(notices.join(' '));
+  };
+
+  const removeMedia = (index: number) => {
+    setAttachedMedia((previousMedia) =>
+      previousMedia.filter((_, mediaIndex) => mediaIndex !== index)
+    );
   };
 
   const removeFile = (index: number) => {
@@ -689,6 +806,7 @@ export default function Home() {
         throw new Error('Der Verbindungstest ist fehlgeschlagen.');
       }
       setKeyResults((await response.json()) as KeyCheckResult[]);
+      setKeysOpen(true);
     } catch (checkError) {
       console.error('Verbindungstest fehlgeschlagen:', checkError);
       setErrorMessage('Der Verbindungstest ist fehlgeschlagen.');
@@ -719,47 +837,80 @@ export default function Home() {
     void handleFileUpload(event.dataTransfer.files);
   };
 
-  const toggleSpeechRecognition = () => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setErrorMessage(
-        'Spracherkennung wird von diesem Browser nicht unterstützt.'
-      );
-      return;
-    }
-
+  // Aufnahme -> Groq Whisper (versteht auch englische Fachbegriffe in deutschen Sätzen)
+  const toggleSpeechRecognition = async () => {
     if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
+      recorderRef.current?.stop();
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'de-DE';
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setErrorMessage('Aufnahme wird von diesem Browser nicht unterstützt.');
+      return;
+    }
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-    };
-    recognition.onerror = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-      setErrorMessage('Bei der Spracherkennung ist ein Fehler aufgetreten.');
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setInput((previousInput) =>
-        previousInput ? `${previousInput} ${transcript}` : transcript
-      );
-    };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
 
-    recognitionRef.current = recognition;
-    recognition.start();
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        if (recordTimerRef.current) clearTimeout(recordTimerRef.current);
+        stream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        setIsListening(false);
+
+        const type = recorder.mimeType || 'audio/webm';
+        const blob = new Blob(chunks, { type });
+        if (blob.size < 1000) return;
+
+        setIsTranscribing(true);
+        try {
+          const form = new FormData();
+          const extension = type.includes('mp4') ? 'mp4' : type.includes('ogg') ? 'ogg' : 'webm';
+          form.append('audio', blob, `aufnahme.${extension}`);
+
+          const response = await fetch('/api/transcribe', { method: 'POST', body: form });
+          const data = (await response.json().catch(() => ({}))) as {
+            text?: string;
+            error?: string;
+          };
+          if (!response.ok) {
+            throw new Error(data.error ?? 'Die Aufnahme konnte nicht umgewandelt werden.');
+          }
+
+          const transcript = data.text ?? '';
+          if (transcript) {
+            setInput((previousInput) =>
+              previousInput ? `${previousInput} ${transcript}` : transcript
+            );
+          }
+        } catch (transcribeError) {
+          setErrorMessage(
+            transcribeError instanceof Error
+              ? transcribeError.message
+              : 'Die Aufnahme konnte nicht umgewandelt werden.'
+          );
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorderRef.current = recorder;
+      recorder.start();
+      setIsListening(true);
+
+      // Sicherheitsgrenze: nach 60 Sekunden automatisch stoppen
+      recordTimerRef.current = setTimeout(() => {
+        if (recorder.state === 'recording') recorder.stop();
+      }, 60_000);
+    } catch {
+      setErrorMessage('Zugriff auf das Mikrofon wurde verweigert.');
+    }
   };
 
   const buildPrompt = () => {
@@ -790,17 +941,27 @@ export default function Home() {
     if (isLoading) return;
 
     const prompt = buildPrompt();
-    if (!prompt.trim()) return;
+    const mediaToSend = attachedMedia;
+    if (!prompt.trim() && mediaToSend.length === 0) return;
 
     setErrorMessage('');
     clearError();
     setInput('');
     setAttachedFiles([]);
+    setAttachedMedia([]);
     setJustFinished(false);
     stickToBottomRef.current = true;
 
     await sendMessage(
-      { text: prompt },
+      {
+        text: prompt.trim() || 'Beschreibe den Anhang.',
+        files: mediaToSend.map((media) => ({
+          type: 'file' as const,
+          mediaType: media.mediaType,
+          url: media.url,
+          filename: media.name,
+        })),
+      },
       {
         body: {
           model: selectedModel,
@@ -1021,6 +1182,31 @@ export default function Home() {
           </div>
 
           {keyResults && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/50">
+              <div className="flex items-center justify-between px-2 py-1 text-[11px] text-zinc-400">
+                <button
+                  type="button"
+                  onClick={() => setKeysOpen((open) => !open)}
+                  aria-expanded={keysOpen}
+                  className="flex items-center gap-1 transition hover:text-zinc-200"
+                >
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform ${keysOpen ? '' : '-rotate-90'}`}
+                  />
+                  Prüfergebnis ({keyResults.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKeyResults(null)}
+                  aria-label="Ergebnis schließen"
+                  title="Schließen"
+                  className="rounded p-0.5 transition hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              {keysOpen && (
+                <div className="px-2 pb-2">
             <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1 text-[11px] leading-snug">
               {keyResults.map((result) => (
                 <li
@@ -1052,6 +1238,9 @@ export default function Home() {
                 </li>
               ))}
             </ul>
+                </div>
+              )}
+            </div>
           )}
 
           {userEmail && (
@@ -1130,13 +1319,15 @@ export default function Home() {
                 : rawText.replace(IMAGE_MARKDOWN, '').trim();
 
               const toolParts = isUser ? [] : getToolParts(message);
+              const fileParts = isUser ? getFileParts(message) : [];
 
               // Leere Blasen vermeiden (z. B. Reasoning-Schritte ohne Text)
               if (
                 !displayText &&
                 !imageUrl &&
                 fileNames.length === 0 &&
-                toolParts.length === 0
+                toolParts.length === 0 &&
+                fileParts.length === 0
               ) {
                 return null;
               }
@@ -1190,6 +1381,21 @@ export default function Home() {
                                   : '…'}
                             </span>
                           </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {fileParts.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {fileParts.map((file) => (
+                          <MediaThumb
+                            key={file.key}
+                            mediaType={file.mediaType}
+                            url={file.url}
+                            name={file.name}
+                            controls
+                            className="max-h-48 max-w-full rounded-lg border border-white/20"
+                          />
                         ))}
                       </div>
                     )}
@@ -1286,6 +1492,38 @@ export default function Home() {
               </div>
             )}
 
+            {/* Angehängte Bilder/Videos */}
+            {attachedMedia.length > 0 && (
+              <div className="mb-2 space-y-1">
+                <div className="flex flex-wrap gap-2">
+                  {attachedMedia.map((media, index) => (
+                    <div key={`${media.name}-${index}`} className="relative">
+                      <MediaThumb
+                        mediaType={media.mediaType}
+                        url={media.url}
+                        name={media.name}
+                        className="h-16 w-16 rounded-lg border border-zinc-700 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeMedia(index)}
+                        className="absolute -right-1 -top-1 rounded-full bg-zinc-800 p-0.5 text-zinc-300 transition hover:text-red-400"
+                        aria-label="Anhang entfernen"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {mediaUnsupported && (
+                  <p className="text-[11px] text-amber-300">
+                    Das gewählte Modell kann {mediaNeedsVideo ? 'keine Videos' : 'keine Bilder'}.
+                    Es wird automatisch ein passendes Modell benutzt.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Angehängte Dateien (entfernbar) */}
             {attachedFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
@@ -1340,7 +1578,8 @@ export default function Home() {
 
                 <button
                   type="button"
-                  onClick={toggleSpeechRecognition}
+                  onClick={() => void toggleSpeechRecognition()}
+                  disabled={isTranscribing}
                   className={`rounded-lg p-1.5 transition ${
                     isListening
                       ? 'animate-pulse bg-red-950/50 text-red-400'
@@ -1363,7 +1602,9 @@ export default function Home() {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={
-                  isListening
+                  isTranscribing
+                    ? 'Wandle Sprache in Text um...'
+                    : isListening
                     ? 'Höre zu... Sprich jetzt...'
                     : isImageModel
                       ? 'Beschreibe das Bild...'
@@ -1392,7 +1633,11 @@ export default function Home() {
               ) : (
                 <button
                   type="submit"
-                  disabled={!input.trim() && attachedFiles.length === 0}
+                  disabled={
+                    !input.trim() &&
+                    attachedFiles.length === 0 &&
+                    attachedMedia.length === 0
+                  }
                   className="absolute right-2 rounded-lg bg-indigo-600 p-2 text-white transition hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600"
                   title="Nachricht senden"
                   aria-label="Nachricht senden"
