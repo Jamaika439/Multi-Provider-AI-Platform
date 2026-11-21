@@ -37,6 +37,8 @@ const API_KEY_ENV: Record<KeyedProvider, string> = {
   groq: 'GROQ_API_KEY',
   cohere: 'COHERE_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
+  nvidia: 'NVIDIA_API_KEY',
+  cloudflare: 'CLOUDFLARE_API_TOKEN',
 };
 
 /** Suffixe der Ersatz-Keys. */
@@ -155,6 +157,23 @@ export function getLanguageModel(model: ModelDefinition): LanguageModel {
 
     case 'openrouter':
       return createOpenRouter(resolveAuth('openrouter', 'bearer')).chat(model.id);
+
+    case 'cloudflare': {
+      // Workers AI: OpenAI-Format, die Adresse enthält die Account-ID.
+      const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+      if (!accountId) throw new MissingApiKeyError('CLOUDFLARE_ACCOUNT_ID');
+      return createOpenAI({
+        ...resolveAuth('cloudflare', 'bearer'),
+        baseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`,
+      }).chat(model.id);
+    }
+
+    case 'nvidia':
+      // NVIDIA NIM spricht das OpenAI-Format (Chat Completions) unter eigener Adresse.
+      return createOpenAI({
+        ...resolveAuth('nvidia', 'bearer'),
+        baseURL: 'https://integrate.api.nvidia.com/v1',
+      }).chat(model.id);
 
     default:
       // Passiert nur für 'image'. Dafür gibt es kein Sprachmodell.
