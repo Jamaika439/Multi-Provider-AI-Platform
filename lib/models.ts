@@ -47,6 +47,16 @@ export const MODELS = [
     video: true,
   },
   {
+    key: 'gemini-3.5-flash',
+    label: 'Gemini 3.5 Flash (Google)',
+    group: 'Google AI Studio',
+    provider: 'google',
+    id: 'gemini-3.5-flash',
+    isFree: true,
+    vision: true,
+    video: true,
+  },
+  {
     key: 'gemini-3.1-flash-lite',
     label: 'Gemini 3.1 Flash-Lite (Google)',
     group: 'Google AI Studio',
