@@ -92,6 +92,39 @@ function describeAttempts(attempts: Attempt[]): string {
 }
 
 /**
+ * Liest aus einer Google-Fehlerantwort, WELCHES Limit erreicht wurde (pro Tag oder
+ * pro Minute, welches Modell) und wann es wieder geht. Andere Anbieter liefern das
+ * nicht, dann bleibt der Text leer.
+ */
+function describeQuota(json: unknown): string {
+  const details = (json as { error?: { details?: unknown } })?.error?.details;
+  if (!Array.isArray(details)) return '';
+
+  const notes: string[] = [];
+  for (const detail of details as Record<string, unknown>[]) {
+    const type = String(detail['@type'] ?? '');
+
+    if (type.endsWith('QuotaFailure') && Array.isArray(detail.violations)) {
+      for (const violation of detail.violations as Record<string, unknown>[]) {
+        const dimensions = (violation.quotaDimensions ?? {}) as Record<string, unknown>;
+        const parts = [
+          violation.quotaId,
+          dimensions.model ? `Modell ${dimensions.model}` : '',
+          violation.quotaValue !== undefined ? `Limit ${violation.quotaValue}` : '',
+        ].filter(Boolean);
+        if (parts.length > 0) notes.push(parts.join(', '));
+      }
+    }
+
+    if (type.endsWith('RetryInfo') && typeof detail.retryDelay === 'string') {
+      notes.push(`erneut versuchen in ${detail.retryDelay}`);
+    }
+  }
+
+  return notes.length > 0 ? ` (Kontingent: ${notes.join(' | ')})` : '';
+}
+
+/**
  * Baut aus einer Fehlerantwort eine neue, bei der die Versuchsliste an die
  * Fehlermeldung angehängt ist. Dadurch sieht der Nutzer im Chat, welche Keys
  * probiert wurden. Key-Werte, die im Antworttext vorkommen, werden unkenntlich
@@ -119,7 +152,7 @@ async function annotateError(
 
     if (json?.error && typeof json.error === 'object' && typeof json.error.message === 'string') {
       // OpenAI, Google, Groq, OpenRouter: {"error": {"message": "..."}}
-      json.error.message = `${json.error.message} [${summary}]`;
+      json.error.message = `${json.error.message}${describeQuota(json)} [${summary}]`;
       body = JSON.stringify(json);
     } else if (typeof json?.message === 'string') {
       // Cohere: {"message": "..."}
