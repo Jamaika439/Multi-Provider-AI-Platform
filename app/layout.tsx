@@ -24,7 +24,7 @@ const geistMono = Geist_Mono({
 
 /** Titel und Beschreibung im Browser-Tab. */
 export const metadata: Metadata = {
-  title: "AI Platform 2026",
+  title: "AI Mesh Frickenhausen",
   description: "Chat mit mehreren KI-Modellen und Bildgenerierung",
 };
 
