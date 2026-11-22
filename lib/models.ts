@@ -18,6 +18,8 @@ export type ProviderName =
   | 'cloudflare'
   | 'image';
 
+export type ModelTag = 'coding' | 'schnell' | 'denken';
+
 export interface ModelDefinition {
   key: string;
   label: string;
@@ -30,6 +32,8 @@ export interface ModelDefinition {
   vision?: boolean;
   /** versteht Videos (nur sehr kleine Clips, siehe Größenlimit) */
   video?: boolean;
+  /** Zusätzliche Eigenschaften zum Sortieren */
+  tags?: ModelTag[];
   /** Live-Websuche: 'google' = Google-Suche (Gemini), 'groq' = Browser-Suche (GPT-OSS bei Groq) */
   webSearch?: 'google' | 'groq';
 }
@@ -43,6 +47,7 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.5-flash-lite',
     isFree: true,
+    tags: ['schnell'],
     vision: true,
     video: true,
   },
@@ -63,6 +68,7 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.1-flash-lite',
     isFree: true,
+    tags: ['schnell'],
     vision: true,
     video: true,
   },
@@ -93,6 +99,7 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.1-pro-preview',
     isFree: false,
+    tags: ['denken'],
     vision: true,
     video: true,
   },
@@ -105,6 +112,7 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.5-flash-lite',
     isFree: true,
+    tags: ['schnell'],
     vision: true,
     webSearch: 'google',
   },
@@ -115,6 +123,7 @@ export const MODELS = [
     provider: 'google',
     id: 'gemini-3.1-flash-lite',
     isFree: true,
+    tags: ['schnell'],
     vision: true,
     webSearch: 'google',
   },
@@ -125,6 +134,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-120b',
     isFree: true,
+    tags: ['denken'],
     webSearch: 'groq',
   },
   {
@@ -134,6 +144,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-20b',
     isFree: true,
+    tags: ['schnell'],
     webSearch: 'groq',
   },
 
@@ -154,6 +165,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6.1-sol',
     isFree: false,
+    tags: ['denken'],
     vision: true,
   },
   {
@@ -163,6 +175,7 @@ export const MODELS = [
     provider: 'openai',
     id: 'gpt-6-astra',
     isFree: false,
+    tags: ['denken'],
     vision: true,
   },
 
@@ -174,6 +187,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-20b',
     isFree: true,
+    tags: ['schnell'],
   },
   {
     key: 'groq-gpt-oss-120b',
@@ -182,6 +196,7 @@ export const MODELS = [
     provider: 'groq',
     id: 'openai/gpt-oss-120b',
     isFree: true,
+    tags: ['denken'],
   },
 
   // --- Cohere -----------------------------------------------------------------
@@ -204,6 +219,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'nvidia/nemotron-3-ultra-550b-a55b',
     isFree: true,
+    tags: ['coding', 'denken'],
   },
   {
     key: 'nvidia-nemotron-35-lightning',
@@ -212,6 +228,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
     isFree: true,
+    tags: ['schnell'],
   },
   {
     key: 'nvidia-nemotron-35-super-vl',
@@ -220,6 +237,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
     isFree: true,
+    tags: ['denken'],
     vision: true,
   },
   {
@@ -229,6 +247,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'minimaxai/minimax-m3.1-flash',
     isFree: true,
+    tags: ['coding'],
   },
   {
     key: 'nvidia-kimi-k31-pro',
@@ -237,6 +256,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'moonshotai/kimi-k3.1-pro',
     isFree: true,
+    tags: ['coding', 'denken'],
   },
   {
     key: 'nvidia-glm-53-flash',
@@ -245,6 +265,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'z-ai/glm-5-3-flash',
     isFree: true,
+    tags: ['denken'],
   },
   {
     key: 'nvidia-laguna-xs-21',
@@ -253,6 +274,7 @@ export const MODELS = [
     provider: 'nvidia',
     id: 'poolside/laguna-xs-2.1',
     isFree: true,
+    tags: ['coding'],
   },
   {
     key: 'nvidia-gemma-4-31b',
@@ -288,6 +310,7 @@ export const MODELS = [
     provider: 'cloudflare',
     id: '@cf/openai/gpt-oss-120b',
     isFree: true,
+    tags: ['denken'],
   },
 
   // --- OpenRouter Free --------------------------------------------------------
@@ -306,6 +329,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     isFree: true,
+    tags: ['coding', 'denken'],
   },
   {
     key: 'openrouter-nemotron-35-super-vl',
@@ -314,6 +338,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3.5-super-vl:free',
     isFree: true,
+    tags: ['denken'],
     vision: true,
   },
   {
@@ -323,6 +348,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'nvidia/nemotron-3.5-lightning:free',
     isFree: true,
+    tags: ['schnell'],
   },
   {
     key: 'openrouter-north-mini-code',
@@ -331,6 +357,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'cohere/north-mini-code:free',
     isFree: true,
+    tags: ['coding'],
   },
   {
     key: 'openrouter-flint',
@@ -339,6 +366,7 @@ export const MODELS = [
     provider: 'openrouter',
     id: 'recursive/flint-v1.0:free',
     isFree: true,
+    tags: ['coding'],
   },
   {
     key: 'openrouter-gemma-4-31b',
@@ -403,5 +431,63 @@ export function getModelGroups(onlyFree = false): {
     }
   }
 
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// Fähigkeiten (zum Sortieren und für die Symbole im Dropdown)
+// ---------------------------------------------------------------------------
+
+export type ModelSkill =
+  | 'bilder'
+  | 'video'
+  | 'websuche'
+  | 'coding'
+  | 'schnell'
+  | 'denken'
+  | 'bildgen';
+
+export const SKILL_INFO: Record<ModelSkill, { label: string; icon: string }> = {
+  bilder: { label: 'Bilder verstehen', icon: '🖼' },
+  video: { label: 'Videos verstehen', icon: '🎬' },
+  websuche: { label: 'Live-Websuche', icon: '🌐' },
+  coding: { label: 'Coding', icon: '💻' },
+  schnell: { label: 'Schnell', icon: '⚡' },
+  denken: { label: 'Denken', icon: '🧠' },
+  bildgen: { label: 'Bilder erzeugen', icon: '🎨' },
+};
+
+export function getModelSkills(model: ModelDefinition): ModelSkill[] {
+  const skills: ModelSkill[] = [];
+  if (model.provider === 'image') skills.push('bildgen');
+  if (model.vision) skills.push('bilder');
+  if (model.video) skills.push('video');
+  if (model.webSearch) skills.push('websuche');
+  for (const tag of model.tags ?? []) skills.push(tag);
+  return skills;
+}
+
+/** Gruppen nach Fähigkeit. Ein Modell kann in mehreren Gruppen stehen. */
+export function getSkillGroups(onlyFree = false): {
+  group: string;
+  models: ModelDefinition[];
+}[] {
+  const all = (MODELS as readonly ModelDefinition[]).filter(
+    (model) => !onlyFree || model.isFree
+  );
+  const groups: { group: string; models: ModelDefinition[] }[] = [];
+
+  for (const skill of Object.keys(SKILL_INFO) as ModelSkill[]) {
+    const models = all.filter((model) => getModelSkills(model).includes(skill));
+    if (models.length > 0) {
+      groups.push({
+        group: `${SKILL_INFO[skill].icon} ${SKILL_INFO[skill].label}`,
+        models,
+      });
+    }
+  }
+
+  const general = all.filter((model) => getModelSkills(model).length === 0);
+  if (general.length > 0) groups.push({ group: 'Allgemeine Chat-Modelle', models: general });
   return groups;
 }
