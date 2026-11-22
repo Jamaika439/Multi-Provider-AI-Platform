@@ -34,6 +34,7 @@ import {
   Square,
   Terminal,
   Trash2,
+  Volume2,
   User,
   X,
   XCircle,
@@ -108,6 +109,48 @@ const transport = new DefaultChatTransport<UIMessage>({
     return { body: { ...body, id, messages: slimMessages, trigger, messageId } };
   },
 });
+
+// Design-Vorlagen (Farben stehen in globals.css) und Vorlese-Einstellungen
+const THEMES = [
+  { key: 'standard', label: 'Dunkel (Standard)' },
+  { key: 'mitternacht', label: 'Mitternacht (Blau)' },
+  { key: 'wald', label: 'Wald (Grün)' },
+  { key: 'sonnenuntergang', label: 'Sonnenuntergang (Warm)' },
+  { key: 'hell', label: 'Hell' },
+];
+const TTS_VOICES = ['Kore', 'Puck', 'Charon', 'Aoede', 'Fenrir', 'Leda', 'Zephyr', 'Orus'];
+const TTS_MAX_CHARS = 2500;
+
+/** Macht aus einer Antwort einen sprechbaren Text (ohne Code, Links und Formatzeichen). */
+function toSpeechText(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/```[\s\S]*?(```|$)/g, ' Codeblock. ')
+    .replace(/https?:\/\/\S+/g, ' Link. ')
+    .replace(/[*_`#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function SpeakButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={active ? 'Vorlesen stoppen' : 'Vorlesen'}
+      className="group/copy relative rounded-md p-1 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+    >
+      {active ? (
+        <Square className="h-3.5 w-3.5 text-amber-300" />
+      ) : (
+        <Volume2 className="h-3.5 w-3.5" />
+      )}
+      <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1 whitespace-nowrap rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-normal text-zinc-200 opacity-0 shadow transition group-hover/copy:opacity-100">
+        {active ? 'Stopp' : 'Vorlesen'}
+      </span>
+    </button>
+  );
+}
 
 // Schnellstart-Aufträge für den GitHub-Agent (laufen im Nur-Lesen-Modus)
 const AGENT_PRESETS = [
@@ -559,6 +602,12 @@ export default function Home() {
   const [canAgent, setCanAgent] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [agentWrite, setAgentWrite] = useState(false);
+  const [theme, setTheme] = useState('standard');
+  const [ttsEngine, setTtsEngine] = useState<'gemini' | 'browser'>('gemini');
+  const [ttsVoice, setTtsVoice] = useState('Kore');
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speakTokenRef = useRef(0);
   const router = useRouter();
 
   const isCheckingKeys = checkingMode !== null;
@@ -707,6 +756,127 @@ export default function Home() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // Gespeicherte Einstellungen (Design, Vorlesen) laden
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem('theme');
+      const savedEngine = localStorage.getItem('ttsEngine');
+      const savedVoice = localStorage.getItem('ttsVoice');
+      queueMicrotask(() => {
+        if (savedTheme) setTheme(savedTheme);
+        if (savedEngine === 'gemini' || savedEngine === 'browser') setTtsEngine(savedEngine);
+        if (savedVoice && TTS_VOICES.includes(savedVoice)) setTtsVoice(savedVoice);
+      });
+    } catch {
+      /* Speicher nicht verfügbar */
+    }
+  }, []);
+
+  const saveSetting = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* Speicher nicht verfügbar */
+    }
+  };
+
+  const changeTheme = (value: string) => {
+    setTheme(value);
+    if (value === 'standard') {
+      delete document.documentElement.dataset.theme;
+    } else {
+      document.documentElement.dataset.theme = value;
+    }
+    saveSetting('theme', value);
+  };
+
+  // Vorlesen
+  const stopSpeaking = () => {
+    speakTokenRef.current += 1;
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setSpeakingId(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const speakWithBrowser = (id: string, text: string) => {
+    if (!('speechSynthesis' in window)) {
+      setErrorMessage('Dieser Browser kann nicht vorlesen.');
+      setSpeakingId(null);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'de-DE';
+    const german = window.speechSynthesis
+      .getVoices()
+      .filter((voice) => voice.lang.toLowerCase().startsWith('de'));
+    const best =
+      german.find((voice) => /natural|neural|online/i.test(voice.name)) ??
+      german.find((voice) => /google/i.test(voice.name)) ??
+      german[0];
+    if (best) utterance.voice = best;
+    utterance.onend = () => setSpeakingId((current) => (current === id ? null : current));
+    utterance.onerror = () => setSpeakingId(null);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const speak = async (id: string, rawText: string) => {
+    if (speakingId === id) {
+      stopSpeaking();
+      return;
+    }
+    stopSpeaking();
+
+    const text = toSpeechText(rawText).slice(0, TTS_MAX_CHARS);
+    if (!text) return;
+
+    const token = speakTokenRef.current;
+    setSpeakingId(id);
+
+    if (ttsEngine === 'browser') {
+      speakWithBrowser(id, text);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: ttsVoice }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? 'KI-Stimme nicht verfügbar.');
+      }
+      const blob = await response.blob();
+      if (token !== speakTokenRef.current) return; // inzwischen gestoppt
+
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setSpeakingId((current) => (current === id ? null : current));
+      };
+      await audio.play();
+    } catch (speakError) {
+      if (token !== speakTokenRef.current) return;
+      setErrorMessage(
+        `${speakError instanceof Error ? speakError.message : 'KI-Stimme nicht verfügbar.'} Es wird die Browser-Stimme benutzt.`
+      );
+      speakWithBrowser(id, text);
+    }
+  };
 
   const resetComposer = () => {
     setInput('');
@@ -1327,6 +1497,57 @@ export default function Home() {
             </div>
           )}
 
+          <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-xs">
+            <label className="flex items-center justify-between gap-2 text-zinc-400">
+              <span>Design</span>
+              <select
+                value={theme}
+                onChange={(event) => changeTheme(event.target.value)}
+                className="max-w-[9.5rem] rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-zinc-200 outline-none"
+              >
+                {THEMES.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center justify-between gap-2 text-zinc-400">
+              <span>Vorlesen</span>
+              <select
+                value={ttsEngine}
+                onChange={(event) => {
+                  const value = event.target.value === 'browser' ? 'browser' : 'gemini';
+                  setTtsEngine(value);
+                  saveSetting('ttsEngine', value);
+                }}
+                className="max-w-[9.5rem] rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-zinc-200 outline-none"
+              >
+                <option value="gemini">KI-Stimme (Gemini)</option>
+                <option value="browser">Browser-Stimme</option>
+              </select>
+            </label>
+            {ttsEngine === 'gemini' && (
+              <label className="flex items-center justify-between gap-2 text-zinc-400">
+                <span>Stimme</span>
+                <select
+                  value={ttsVoice}
+                  onChange={(event) => {
+                    setTtsVoice(event.target.value);
+                    saveSetting('ttsVoice', event.target.value);
+                  }}
+                  className="max-w-[9.5rem] rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-zinc-200 outline-none"
+                >
+                  {TTS_VOICES.map((voice) => (
+                    <option key={voice} value={voice}>
+                      {voice}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
           {userEmail && (
             <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs">
               <span className="min-w-0 truncate text-zinc-300">{userEmail}</span>
@@ -1486,7 +1707,11 @@ export default function Home() {
                     )}
 
                     {!isUser && displayText && (
-                      <div className="mb-2 flex justify-end">
+                      <div className="mb-2 flex justify-end gap-1">
+                        <SpeakButton
+                          active={speakingId === message.id}
+                          onClick={() => void speak(message.id, displayText)}
+                        />
                         <CopyButton text={displayText} />
                       </div>
                     )}
