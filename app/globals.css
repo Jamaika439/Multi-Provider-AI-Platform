@@ -78,3 +78,122 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
+
+/* ==========================================================================
+   DESIGN-VORLAGEN (Auswahl in der Seitenleiste)
+   Tailwind 4 baut seine Farben aus Variablen. Hier werden sie pro Design
+   überschrieben. Ohne data-theme gilt das Standard-Design.
+   ========================================================================== */
+
+[data-theme='mitternacht'] {
+  color-scheme: dark;
+  --color-zinc-50: #f3f5fa;
+  --color-zinc-100: #e4e8f3;
+  --color-zinc-200: #ccd3e6;
+  --color-zinc-300: #aab5d1;
+  --color-zinc-400: #8795b8;
+  --color-zinc-500: #5b6a8f;
+  --color-zinc-600: #3a4768;
+  --color-zinc-700: #26314d;
+  --color-zinc-800: #172036;
+  --color-zinc-900: #0c1222;
+  --color-zinc-950: #070b16;
+  --color-indigo-300: #7dd3fc;
+  --color-indigo-400: #38bdf8;
+  --color-indigo-500: #0ea5e9;
+  --color-indigo-600: #0284c7;
+  --color-violet-300: #67e8f9;
+  --color-violet-400: #22d3ee;
+  --color-violet-500: #06b6d4;
+  --color-violet-600: #0891b2;
+  --background: #070b16;
+  --foreground: #e4e8f3;
+}
+
+[data-theme='wald'] {
+  color-scheme: dark;
+  --color-zinc-50: #f4f8f5;
+  --color-zinc-100: #e8f0ea;
+  --color-zinc-200: #d3dfd7;
+  --color-zinc-300: #b2c4b8;
+  --color-zinc-400: #8fa898;
+  --color-zinc-500: #65806f;
+  --color-zinc-600: #41594a;
+  --color-zinc-700: #2b4033;
+  --color-zinc-800: #1b2a21;
+  --color-zinc-900: #101a14;
+  --color-zinc-950: #0a110d;
+  --color-indigo-300: #6ee7b7;
+  --color-indigo-400: #34d399;
+  --color-indigo-500: #10b981;
+  --color-indigo-600: #059669;
+  --color-violet-300: #bef264;
+  --color-violet-400: #a3e635;
+  --color-violet-500: #84cc16;
+  --color-violet-600: #65a30d;
+  --background: #0a110d;
+  --foreground: #e8f0ea;
+}
+
+[data-theme='sonnenuntergang'] {
+  color-scheme: dark;
+  --color-zinc-50: #f9f4f1;
+  --color-zinc-100: #f1e8e3;
+  --color-zinc-200: #e3d5cd;
+  --color-zinc-300: #ccb8ae;
+  --color-zinc-400: #b0958a;
+  --color-zinc-500: #8a6f64;
+  --color-zinc-600: #614a42;
+  --color-zinc-700: #44302a;
+  --color-zinc-800: #2d1c18;
+  --color-zinc-900: #1d1210;
+  --color-zinc-950: #140c0a;
+  --color-indigo-300: #fdba74;
+  --color-indigo-400: #fb923c;
+  --color-indigo-500: #f97316;
+  --color-indigo-600: #ea580c;
+  --color-violet-300: #fda4af;
+  --color-violet-400: #fb7185;
+  --color-violet-500: #f43f5e;
+  --color-violet-600: #e11d48;
+  --background: #140c0a;
+  --foreground: #f1e8e3;
+}
+
+[data-theme='hell'] {
+  color-scheme: light;
+  --color-zinc-50: #09090b;
+  --color-zinc-100: #18181b;
+  --color-zinc-200: #27272a;
+  --color-zinc-300: #3f3f46;
+  --color-zinc-400: #52525b;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #a1a1aa;
+  --color-zinc-700: #d4d4d8;
+  --color-zinc-800: #e4e4e7;
+  --color-zinc-900: #f4f4f5;
+  --color-zinc-950: #fafafa;
+  --background: #fafafa;
+  --foreground: #18181b;
+}
+
+/* Helles Design: weißer Text bleibt auf bunten Flächen (Nachrichten, Knöpfe) weiß,
+   sonst wäre er auf hellem Grund unsichtbar. */
+[data-theme='hell'] {
+  --color-white: #09090b;
+  --color-indigo-300: #4338ca;
+  --color-indigo-400: #4f46e5;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-violet-500: #8b5cf6;
+  --color-violet-600: #7c3aed;
+}
+[data-theme='hell'] .bg-indigo-600,
+[data-theme='hell'] .bg-indigo-500,
+[data-theme='hell'] .bg-violet-600,
+[data-theme='hell'] .bg-violet-500,
+[data-theme='hell'] .from-violet-500 {
+  color: #ffffff;
+}
