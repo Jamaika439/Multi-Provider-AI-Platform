@@ -115,8 +115,8 @@ const THEMES = [
   { key: 'standard', label: 'Dunkel (Standard)' },
   { key: 'mitternacht', label: 'Mitternacht (Blau)' },
   { key: 'wald', label: 'Wald (Grün)' },
-  { key: 'sonnenuntergang', label: 'Sonnenuntergang (Warm)' },
-  { key: 'hell', label: 'Hell' },
+  { key: 'sonnenuntergang', label: 'Sonnenuntergang (Gelb → Orange)' },
+  { key: 'hell', label: 'Weiße Blindheit' },
 ];
 const TTS_VOICES = ['Kore', 'Puck', 'Charon', 'Aoede', 'Fenrir', 'Leda', 'Zephyr', 'Orus'];
 const TTS_MAX_CHARS = 2500;
@@ -130,6 +130,24 @@ function toSpeechText(text: string): string {
     .replace(/[*_`#>]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Teilt den Text in Häppchen: ein kurzes erstes (schnell hörbar), danach größere. */
+function splitForSpeech(text: string): string[] {
+  const sentences = text.match(/[^.!?…]+[.!?…]*\s*/g) ?? [text];
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of sentences) {
+    const limit = chunks.length === 0 ? 220 : 700;
+    if (current && (current + sentence).length > limit) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current += sentence;
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
 }
 
 function SpeakButton({ active, onClick }: { active: boolean; onClick: () => void }) {
@@ -608,6 +626,10 @@ export default function Home() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speakTokenRef = useRef(0);
+  const [ttsVolume, setTtsVolume] = useState(0.8);
+  const ttsVolumeRef = useRef(0.8);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const isCheckingKeys = checkingMode !== null;
@@ -751,6 +773,7 @@ export default function Home() {
       if (event.key === 'Escape') {
         setIsSidebarOpen(false);
         setIsAgentOpen(false);
+        setProfileOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -763,10 +786,15 @@ export default function Home() {
       const savedTheme = localStorage.getItem('theme');
       const savedEngine = localStorage.getItem('ttsEngine');
       const savedVoice = localStorage.getItem('ttsVoice');
+      const savedVolume = Number(localStorage.getItem('ttsVolume'));
       queueMicrotask(() => {
         if (savedTheme) setTheme(savedTheme);
         if (savedEngine === 'gemini' || savedEngine === 'browser') setTtsEngine(savedEngine);
         if (savedVoice && TTS_VOICES.includes(savedVoice)) setTtsVoice(savedVoice);
+        if (Number.isFinite(savedVolume) && savedVolume > 0 && savedVolume <= 1) {
+          setTtsVolume(savedVolume);
+          ttsVolumeRef.current = savedVolume;
+        }
       });
     } catch {
       /* Speicher nicht verfügbar */
@@ -794,8 +822,12 @@ export default function Home() {
   // Vorlesen
   const stopSpeaking = () => {
     speakTokenRef.current += 1;
-    audioRef.current?.pause();
+    const playing = audioRef.current;
     audioRef.current = null;
+    if (playing) {
+      playing.pause();
+      playing.dispatchEvent(new Event('ended')); // weckt die wartende Wiedergabe-Schleife
+    }
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setSpeakingId(null);
   };
@@ -817,6 +849,7 @@ export default function Home() {
     }
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'de-DE';
+    utterance.volume = ttsVolumeRef.current;
     const german = window.speechSynthesis
       .getVoices()
       .filter((voice) => voice.lang.toLowerCase().startsWith('de'));
@@ -829,6 +862,36 @@ export default function Home() {
     utterance.onerror = () => setSpeakingId(null);
     window.speechSynthesis.speak(utterance);
   };
+
+  const fetchSpeechAudio = async (text: string): Promise<Blob> => {
+    const response = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice: ttsVoice }),
+    });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? 'KI-Stimme nicht verfügbar.');
+    }
+    return response.blob();
+  };
+
+  const playAudioBlob = (blob: Blob) =>
+    new Promise<void>((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = ttsVolumeRef.current;
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Wiedergabe fehlgeschlagen.'));
+      };
+      audio.play().catch(reject);
+    });
 
   const speak = async (id: string, rawText: string) => {
     if (speakingId === id) {
@@ -848,35 +911,62 @@ export default function Home() {
       return;
     }
 
-    try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: ttsVoice }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? 'KI-Stimme nicht verfügbar.');
-      }
-      const blob = await response.blob();
-      if (token !== speakTokenRef.current) return; // inzwischen gestoppt
+    // Kurzes erstes Stück: beginnt schnell. Das nächste wird schon geholt, während das erste läuft.
+    const chunks = splitForSpeech(text);
+    let played = 0;
 
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-        setSpeakingId((current) => (current === id ? null : current));
-      };
-      await audio.play();
+    try {
+      let next = fetchSpeechAudio(chunks[0]);
+      next.catch(() => undefined);
+
+      for (let index = 0; index < chunks.length; index++) {
+        const blob = await next;
+        if (token !== speakTokenRef.current) return;
+
+        if (index + 1 < chunks.length) {
+          next = fetchSpeechAudio(chunks[index + 1]);
+          next.catch(() => undefined);
+        }
+
+        await playAudioBlob(blob);
+        if (token !== speakTokenRef.current) return;
+        played += 1;
+      }
+
+      setSpeakingId((current) => (current === id ? null : current));
     } catch (speakError) {
       if (token !== speakTokenRef.current) return;
-      setErrorMessage(
-        `${speakError instanceof Error ? speakError.message : 'KI-Stimme nicht verfügbar.'} Es wird die Browser-Stimme benutzt.`
-      );
-      speakWithBrowser(id, text);
+      const reason =
+        speakError instanceof Error ? speakError.message : 'KI-Stimme nicht verfügbar.';
+
+      if (played === 0) {
+        setErrorMessage(`${reason} Es wird die Browser-Stimme benutzt.`);
+        speakWithBrowser(id, text);
+      } else {
+        setErrorMessage(`${reason} Das Vorlesen wurde beendet.`);
+        setSpeakingId(null);
+      }
     }
   };
+
+  const changeVolume = (value: number) => {
+    setTtsVolume(value);
+    ttsVolumeRef.current = value;
+    if (audioRef.current) audioRef.current.volume = value;
+    saveSetting('ttsVolume', String(value));
+  };
+
+  // Profil-Fenster schließt bei Klick daneben
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [profileOpen]);
 
   const resetComposer = () => {
     setInput('');
@@ -1497,71 +1587,127 @@ export default function Home() {
             </div>
           )}
 
-          <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-xs">
-            <label className="flex items-center justify-between gap-2 text-zinc-400">
-              <span>Design</span>
-              <select
-                value={theme}
-                onChange={(event) => changeTheme(event.target.value)}
-                className="max-w-[9.5rem] rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-zinc-200 outline-none"
+          {/* Profil-Knopf mit kleinem Pop-up (Einstellungen) */}
+          <div ref={profileRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setProfileOpen((open) => !open)}
+              aria-expanded={profileOpen}
+              aria-haspopup="dialog"
+              className="flex w-full items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-left text-xs transition hover:bg-zinc-800"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600/30 text-indigo-300">
+                <User className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-zinc-200">{userEmail || 'Profil'}</span>
+                <span className="block text-[10px] text-zinc-500">Profil und Einstellungen</span>
+              </span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${
+                  profileOpen ? '' : 'rotate-180'
+                }`}
+              />
+            </button>
+
+            {profileOpen && (
+              <div
+                role="dialog"
+                aria-label="Profil und Einstellungen"
+                className="absolute bottom-full left-0 z-50 mb-2 w-full min-w-[16rem] space-y-3 rounded-xl border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-2xl"
               >
-                {THEMES.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center justify-between gap-2 text-zinc-400">
-              <span>Vorlesen</span>
-              <select
-                value={ttsEngine}
-                onChange={(event) => {
-                  const value = event.target.value === 'browser' ? 'browser' : 'gemini';
-                  setTtsEngine(value);
-                  saveSetting('ttsEngine', value);
-                }}
-                className="max-w-[9.5rem] rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-zinc-200 outline-none"
-              >
-                <option value="gemini">KI-Stimme (Gemini)</option>
-                <option value="browser">Browser-Stimme</option>
-              </select>
-            </label>
-            {ttsEngine === 'gemini' && (
-              <label className="flex items-center justify-between gap-2 text-zinc-400">
-                <span>Stimme</span>
-                <select
-                  value={ttsVoice}
-                  onChange={(event) => {
-                    setTtsVoice(event.target.value);
-                    saveSetting('ttsVoice', event.target.value);
-                  }}
-                  className="max-w-[9.5rem] rounded border border-zinc-800 bg-zinc-900 px-1.5 py-1 text-zinc-200 outline-none"
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Profil
+                  </p>
+                  <p className="truncate text-zinc-200">{userEmail || 'Nicht angemeldet'}</p>
+                </div>
+
+                <label className="block text-zinc-400">
+                  <span className="mb-1 block">Design</span>
+                  <select
+                    value={theme}
+                    onChange={(event) => changeTheme(event.target.value)}
+                    className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-zinc-200 outline-none"
+                  >
+                    {THEMES.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="space-y-2 border-t border-zinc-800 pt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Vorlesen
+                  </p>
+                  <select
+                    value={ttsEngine}
+                    onChange={(event) => {
+                      const value = event.target.value === 'browser' ? 'browser' : 'gemini';
+                      setTtsEngine(value);
+                      saveSetting('ttsEngine', value);
+                    }}
+                    className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-zinc-200 outline-none"
+                  >
+                    <option value="gemini">KI-Stimme (Gemini)</option>
+                    <option value="browser">Browser-Stimme</option>
+                  </select>
+
+                  {ttsEngine === 'gemini' && (
+                    <select
+                      value={ttsVoice}
+                      onChange={(event) => {
+                        setTtsVoice(event.target.value);
+                        saveSetting('ttsVoice', event.target.value);
+                      }}
+                      aria-label="Stimme"
+                      className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-zinc-200 outline-none"
+                    >
+                      {TTS_VOICES.map((voice) => (
+                        <option key={voice} value={voice}>
+                          Stimme: {voice}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  <label className="block text-zinc-400">
+                    <span className="mb-1 flex justify-between">
+                      <span>Lautstärke</span>
+                      <span>{Math.round(ttsVolume * 100)} %</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.round(ttsVolume * 100)}
+                      onChange={(event) => changeVolume(Number(event.target.value) / 100)}
+                      className="w-full accent-indigo-500"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => void speak('test', 'Hallo! So klingt diese Stimme.')}
+                    className="w-full rounded-lg bg-zinc-800 px-2 py-1.5 text-zinc-200 transition hover:bg-zinc-700"
+                  >
+                    {speakingId === 'test' ? 'Stopp' : 'Stimme testen'}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 px-2 py-1.5 text-zinc-300 transition hover:bg-zinc-800 hover:text-red-300"
                 >
-                  {TTS_VOICES.map((voice) => (
-                    <option key={voice} value={voice}>
-                      {voice}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <LogOut className="h-3.5 w-3.5" />
+                  Abmelden
+                </button>
+              </div>
             )}
           </div>
-
-          {userEmail && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs">
-              <span className="min-w-0 truncate text-zinc-300">{userEmail}</span>
-              <button
-                type="button"
-                onClick={() => void logout()}
-                className="shrink-0 rounded p-1 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
-                title="Abmelden"
-                aria-label="Abmelden"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
 
           <div>
             <p className="text-[11px] leading-relaxed text-zinc-500">
