@@ -43,7 +43,7 @@ export default function LoginPage() {
       >
         <div className="flex items-center gap-2 text-lg font-bold">
           <Sparkles className="h-5 w-5 text-indigo-400" />
-          AI Platform 2026
+          AI Mesh Frickenhausen
         </div>
         <p className="text-sm text-zinc-400">
           {mode === 'login' ? 'Melde dich an.' : 'Neues Konto erstellen.'}
