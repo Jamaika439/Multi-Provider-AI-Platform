@@ -49,6 +49,9 @@ import {
   DEFAULT_MODEL,
   MODELS,
   getModelGroups,
+  getModelSkills,
+  getSkillGroups,
+  SKILL_INFO,
   type ModelDefinition,
   type ModelKey,
 } from '@/lib/models';
@@ -116,6 +119,8 @@ const THEMES = [
   { key: 'mitternacht', label: 'Mitternacht (Blau)' },
   { key: 'wald', label: 'Wald (Grün)' },
   { key: 'sonnenuntergang', label: 'Sonnenuntergang (Gelb → Orange)' },
+  { key: 'magisch', label: 'Magisch (Violett & Gold)' },
+  { key: 'ocean', label: 'Ocean (Türkis)' },
   { key: 'hell', label: 'Weiße Blindheit' },
 ];
 const TTS_VOICES = ['Kore', 'Puck', 'Charon', 'Aoede', 'Fenrir', 'Leda', 'Zephyr', 'Orus'];
@@ -629,6 +634,8 @@ export default function Home() {
   const [ttsVolume, setTtsVolume] = useState(0.8);
   const ttsVolumeRef = useRef(0.8);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [sortMode, setSortMode] = useState<'anbieter' | 'skill'>('anbieter');
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -675,7 +682,19 @@ export default function Home() {
   const mediaUnsupported =
     attachedMedia.length > 0 &&
     !(mediaNeedsVideo ? selectedCaps?.video : selectedCaps?.vision);
-  const modelGroups = getModelGroups(onlyFree);
+  const baseGroups = sortMode === 'skill' ? getSkillGroups(onlyFree) : getModelGroups(onlyFree);
+  const favoriteList = (MODELS as readonly ModelDefinition[]).filter(
+    (model) => favorites.includes(model.key) && (!onlyFree || model.isFree)
+  );
+  const modelGroups =
+    favoriteList.length > 0
+      ? [{ group: '⭐ Favoriten', models: favoriteList }, ...baseGroups]
+      : baseGroups;
+  const isFavorite = favorites.includes(selectedModel);
+  const skillIcons = (model: ModelDefinition) =>
+    getModelSkills(model)
+      .map((skill) => SKILL_INFO[skill].icon)
+      .join('');
   const shownError = errorMessage || error?.message || '';
 
   // Login prüfen; ohne Anmeldung geht es zur Login-Seite
@@ -747,7 +766,7 @@ export default function Home() {
 
   // Tab-Titel zeigt, wann die Antwort fertig ist (auch in anderem Tab sichtbar)
   useEffect(() => {
-    const base = 'AI Platform 2026';
+    const base = 'AI Mesh Frickenhausen';
     document.title = isLoading
       ? `⏳ Arbeitet… – ${base}`
       : justFinished
@@ -787,8 +806,21 @@ export default function Home() {
       const savedEngine = localStorage.getItem('ttsEngine');
       const savedVoice = localStorage.getItem('ttsVoice');
       const savedVolume = Number(localStorage.getItem('ttsVolume'));
+      const savedFavorites = localStorage.getItem('favoriteModels');
+      const savedSort = localStorage.getItem('modelSort');
       queueMicrotask(() => {
         if (savedTheme) setTheme(savedTheme);
+        if (savedSort === 'skill') setSortMode('skill');
+        if (savedFavorites) {
+          try {
+            const parsed = JSON.parse(savedFavorites) as unknown;
+            if (Array.isArray(parsed)) {
+              setFavorites(parsed.filter((entry): entry is string => typeof entry === 'string'));
+            }
+          } catch {
+            /* ungültige Daten ignorieren */
+          }
+        }
         if (savedEngine === 'gemini' || savedEngine === 'browser') setTtsEngine(savedEngine);
         if (savedVoice && TTS_VOICES.includes(savedVoice)) setTtsVoice(savedVoice);
         if (Number.isFinite(savedVolume) && savedVolume > 0 && savedVolume <= 1) {
@@ -800,6 +832,14 @@ export default function Home() {
       /* Speicher nicht verfügbar */
     }
   }, []);
+
+  const toggleFavorite = () => {
+    const next = favorites.includes(selectedModel)
+      ? favorites.filter((key) => key !== selectedModel)
+      : [...favorites, selectedModel];
+    setFavorites(next);
+    saveSetting('favoriteModels', JSON.stringify(next));
+  };
 
   const saveSetting = (key: string, value: string) => {
     try {
@@ -1366,7 +1406,7 @@ export default function Home() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-lg font-bold">
               <Sparkles className="h-5 w-5 text-indigo-400" />
-              <span>AI Platform 2026</span>
+              <span>AI Mesh Frickenhausen</span>
             </div>
             <button
               type="button"
@@ -1440,11 +1480,45 @@ export default function Home() {
                     <option key={model.key} value={model.key}>
                       {model.isFree ? '🆓 ' : '💰 '}
                       {model.label}
+                      {skillIcons(model) ? ` ${skillIcons(model)}` : ''}
                     </option>
                   ))}
                 </optgroup>
               ))}
             </select>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleFavorite}
+                aria-pressed={isFavorite}
+                title={isFavorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-sm leading-none transition hover:bg-zinc-800"
+              >
+                <span className={isFavorite ? 'text-amber-300' : 'text-zinc-400'}>
+                  {isFavorite ? '★' : '☆'}
+                </span>
+              </button>
+              <select
+                value={sortMode}
+                onChange={(event) => {
+                  const value = event.target.value === 'skill' ? 'skill' : 'anbieter';
+                  setSortMode(value);
+                  saveSetting('modelSort', value);
+                }}
+                aria-label="Sortierung der Modelle"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200 outline-none"
+              >
+                <option value="anbieter">Sortiert nach Anbieter</option>
+                <option value="skill">Sortiert nach Fähigkeit</option>
+              </select>
+            </div>
+
+            <p className="text-[10px] leading-tight text-zinc-500">
+              {Object.values(SKILL_INFO)
+                .map((info) => `${info.icon} ${info.label}`)
+                .join(' · ')}
+            </p>
 
             <p className="text-[10px] leading-tight text-zinc-500">
               {onlyFree
