@@ -136,36 +136,109 @@ body {
 }
 
 [data-theme='sonnenuntergang'] {
-  color-scheme: light;
-  --color-zinc-50: #2b1305;
-  --color-zinc-100: #3d1d08;
-  --color-zinc-200: #53290b;
-  --color-zinc-300: #6e3a12;
-  --color-zinc-400: #8a4d1c;
-  --color-zinc-500: #a8642a;
-  --color-zinc-600: #d99a5a;
-  --color-zinc-700: #f2c27d;
-  --color-zinc-800: #f7d79a;
-  --color-zinc-900: #fde9b4;
-  --color-zinc-950: #fff6d6;
-  --color-white: #2b1305;
-  --color-indigo-300: #9a3412;
-  --color-indigo-400: #c2410c;
-  --color-indigo-500: #ea580c;
+  color-scheme: dark;
+  --color-zinc-50: #f9f4f1;
+  --color-zinc-100: #f1e8e3;
+  --color-zinc-200: #e3d5cd;
+  --color-zinc-300: #ccb8ae;
+  --color-zinc-400: #b0958a;
+  --color-zinc-500: #8a6f64;
+  --color-zinc-600: #614a42;
+  --color-zinc-700: #44302a;
+  --color-zinc-800: #2d1c18;
+  --color-zinc-900: #1d1210;
+  --color-zinc-950: #140c0a;
+  --color-indigo-300: #fdba74;
+  --color-indigo-400: #fb923c;
+  --color-indigo-500: #f97316;
   --color-indigo-600: #ea580c;
-  --color-violet-300: #9f1239;
-  --color-violet-400: #be123c;
-  --color-violet-500: #e11d48;
-  --color-violet-600: #be123c;
-  --background: #fde68a;
-  --foreground: #2b1305;
+  --color-violet-300: #fde68a;
+  --color-violet-400: #fcd34d;
+  --color-violet-500: #f59e0b;
+  --color-violet-600: #d97706;
+  --background: #1d1405;
+  --foreground: #f1e8e3;
 }
-/* Verlauf: oben gelb, nach unten orange */
+/* Verlauf: oben dunkles Gold, in der Mitte Orange, unten tiefes Rostrot */
 [data-theme='sonnenuntergang'] main {
-  background-image: linear-gradient(to bottom, #fde68a 0%, #fdba74 60%, #fb923c 100%);
+  background-image: linear-gradient(to bottom, #5c4a0c 0%, #7a3b0c 55%, #4a1c0a 100%);
 }
 [data-theme='sonnenuntergang'] aside {
-  background-image: linear-gradient(to bottom, #fff3bf 0%, #fed7aa 100%);
+  background-image: linear-gradient(to bottom, #3d2e08 0%, #3a1a09 100%);
+}
+
+[data-theme='magisch'] {
+  color-scheme: dark;
+  --color-zinc-50: #f8f5fe;
+  --color-zinc-100: #f0ebfc;
+  --color-zinc-200: #e1d8f8;
+  --color-zinc-300: #cbbaf2;
+  --color-zinc-400: #ac92e6;
+  --color-zinc-500: #8564cc;
+  --color-zinc-600: #5b37a3;
+  --color-zinc-700: #3f2275;
+  --color-zinc-800: #2a1450;
+  --color-zinc-900: #1a0b33;
+  --color-zinc-950: #0f0620;
+  --color-indigo-300: #f5d0fe;
+  --color-indigo-400: #e879f9;
+  --color-indigo-500: #d946ef;
+  --color-indigo-600: #a21caf;
+  --color-violet-300: #fde68a;
+  --color-violet-400: #fcd34d;
+  --color-violet-500: #f59e0b;
+  --color-violet-600: #d97706;
+  --background: #0f0620;
+  --foreground: #f0ebfc;
+}
+/* Sternenhimmel mit magischem Leuchten */
+[data-theme='magisch'] main {
+  background-image:
+    radial-gradient(1.5px 1.5px at 30px 40px, rgba(253, 230, 138, 0.9), transparent),
+    radial-gradient(1px 1px at 120px 90px, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1.5px 1.5px at 190px 150px, rgba(232, 121, 249, 0.8), transparent),
+    radial-gradient(1px 1px at 80px 180px, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(circle at 15% 10%, rgba(217, 70, 239, 0.22), transparent 45%),
+    radial-gradient(circle at 85% 95%, rgba(245, 158, 11, 0.14), transparent 45%),
+    linear-gradient(to bottom, #1a0b33, #0f0620);
+  background-size: 220px 220px, 220px 220px, 220px 220px, 220px 220px, auto, auto, auto;
+}
+[data-theme='magisch'] aside {
+  background-image: linear-gradient(to bottom, #231044, #130727);
+}
+
+[data-theme='ocean'] {
+  color-scheme: dark;
+  --color-zinc-50: #f1fafc;
+  --color-zinc-100: #e3f3f8;
+  --color-zinc-200: #c9e6f0;
+  --color-zinc-300: #9fd1e3;
+  --color-zinc-400: #6bb5d1;
+  --color-zinc-500: #3b8fb0;
+  --color-zinc-600: #1f6585;
+  --color-zinc-700: #14465f;
+  --color-zinc-800: #0d3046;
+  --color-zinc-900: #071e2d;
+  --color-zinc-950: #04121c;
+  --color-indigo-300: #67e8f9;
+  --color-indigo-400: #22d3ee;
+  --color-indigo-500: #06b6d4;
+  --color-indigo-600: #0891b2;
+  --color-violet-300: #5eead4;
+  --color-violet-400: #2dd4bf;
+  --color-violet-500: #14b8a6;
+  --color-violet-600: #0d9488;
+  --background: #04121c;
+  --foreground: #e3f3f8;
+}
+/* Von der hellen Wasseroberfläche in die Tiefsee */
+[data-theme='ocean'] main {
+  background-image:
+    radial-gradient(ellipse at 50% -20%, rgba(34, 211, 238, 0.25), transparent 60%),
+    linear-gradient(to bottom, #0c4a6e 0%, #08405f 35%, #062a42 70%, #04121c 100%);
+}
+[data-theme='ocean'] aside {
+  background-image: linear-gradient(to bottom, #0a3a55, #04121c);
 }
 
 [data-theme='hell'] {
@@ -202,11 +275,6 @@ body {
 [data-theme='hell'] .bg-indigo-500,
 [data-theme='hell'] .bg-violet-600,
 [data-theme='hell'] .bg-violet-500,
-[data-theme='hell'] .from-violet-500,
-[data-theme='sonnenuntergang'] .bg-indigo-600,
-[data-theme='sonnenuntergang'] .bg-indigo-500,
-[data-theme='sonnenuntergang'] .bg-violet-600,
-[data-theme='sonnenuntergang'] .bg-violet-500,
-[data-theme='sonnenuntergang'] .from-violet-500 {
+[data-theme='hell'] .from-violet-500 {
   color: #ffffff;
 }
