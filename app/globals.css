@@ -136,28 +136,36 @@ body {
 }
 
 [data-theme='sonnenuntergang'] {
-  color-scheme: dark;
-  --color-zinc-50: #f9f4f1;
-  --color-zinc-100: #f1e8e3;
-  --color-zinc-200: #e3d5cd;
-  --color-zinc-300: #ccb8ae;
-  --color-zinc-400: #b0958a;
-  --color-zinc-500: #8a6f64;
-  --color-zinc-600: #614a42;
-  --color-zinc-700: #44302a;
-  --color-zinc-800: #2d1c18;
-  --color-zinc-900: #1d1210;
-  --color-zinc-950: #140c0a;
-  --color-indigo-300: #fdba74;
-  --color-indigo-400: #fb923c;
-  --color-indigo-500: #f97316;
+  color-scheme: light;
+  --color-zinc-50: #2b1305;
+  --color-zinc-100: #3d1d08;
+  --color-zinc-200: #53290b;
+  --color-zinc-300: #6e3a12;
+  --color-zinc-400: #8a4d1c;
+  --color-zinc-500: #a8642a;
+  --color-zinc-600: #d99a5a;
+  --color-zinc-700: #f2c27d;
+  --color-zinc-800: #f7d79a;
+  --color-zinc-900: #fde9b4;
+  --color-zinc-950: #fff6d6;
+  --color-white: #2b1305;
+  --color-indigo-300: #9a3412;
+  --color-indigo-400: #c2410c;
+  --color-indigo-500: #ea580c;
   --color-indigo-600: #ea580c;
-  --color-violet-300: #fda4af;
-  --color-violet-400: #fb7185;
-  --color-violet-500: #f43f5e;
-  --color-violet-600: #e11d48;
-  --background: #140c0a;
-  --foreground: #f1e8e3;
+  --color-violet-300: #9f1239;
+  --color-violet-400: #be123c;
+  --color-violet-500: #e11d48;
+  --color-violet-600: #be123c;
+  --background: #fde68a;
+  --foreground: #2b1305;
+}
+/* Verlauf: oben gelb, nach unten orange */
+[data-theme='sonnenuntergang'] main {
+  background-image: linear-gradient(to bottom, #fde68a 0%, #fdba74 60%, #fb923c 100%);
+}
+[data-theme='sonnenuntergang'] aside {
+  background-image: linear-gradient(to bottom, #fff3bf 0%, #fed7aa 100%);
 }
 
 [data-theme='hell'] {
@@ -194,6 +202,11 @@ body {
 [data-theme='hell'] .bg-indigo-500,
 [data-theme='hell'] .bg-violet-600,
 [data-theme='hell'] .bg-violet-500,
-[data-theme='hell'] .from-violet-500 {
+[data-theme='hell'] .from-violet-500,
+[data-theme='sonnenuntergang'] .bg-indigo-600,
+[data-theme='sonnenuntergang'] .bg-indigo-500,
+[data-theme='sonnenuntergang'] .bg-violet-600,
+[data-theme='sonnenuntergang'] .bg-violet-500,
+[data-theme='sonnenuntergang'] .from-violet-500 {
   color: #ffffff;
 }
