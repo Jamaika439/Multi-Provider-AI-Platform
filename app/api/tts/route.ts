@@ -12,6 +12,32 @@ const ALLOWED_VOICES = [
 ];
 const MAX_CHARS = 2500;
 
+// Gegen das Knacken am Ende: letzte Millisekunden abschneiden und ein-/ausblenden.
+// Hörst du noch ein Knacken, TRIM_END_MS erhöhen. Fehlt das Wortende, senken.
+const TRIM_END_MS = 300;
+const FADE_IN_MS = 15;
+const FADE_OUT_MS = 80;
+
+/** Entfernt den Randbereich der Aufnahme und blendet Anfang und Ende weich aus/ein. */
+function cleanPcm(pcm: Buffer, sampleRate: number): Buffer {
+  const bytesPerMs = (sampleRate * 2) / 1000;
+  let end = pcm.length - (Math.floor(TRIM_END_MS * bytesPerMs) & ~1);
+  if (end < bytesPerMs * 400) end = pcm.length; // zu kurz zum Kürzen
+
+  const out = Buffer.from(pcm.subarray(0, end - (end % 2)));
+  const fadeIn = Math.min(Math.floor(FADE_IN_MS * bytesPerMs) & ~1, out.length);
+  const fadeOut = Math.min(Math.floor(FADE_OUT_MS * bytesPerMs) & ~1, out.length);
+
+  for (let i = 0; i < fadeIn; i += 2) {
+    out.writeInt16LE(Math.round(out.readInt16LE(i) * (i / fadeIn)), i);
+  }
+  for (let i = 0; i < fadeOut; i += 2) {
+    const position = out.length - fadeOut + i;
+    out.writeInt16LE(Math.round(out.readInt16LE(position) * (1 - i / fadeOut)), position);
+  }
+  return out;
+}
+
 /** Verpackt rohe PCM-Daten (16 Bit, mono) in eine WAV-Datei, die jeder Browser abspielt. */
 function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
   const header = Buffer.alloc(44);
@@ -84,7 +110,7 @@ export async function POST(req: Request) {
           if (!inline?.data) break; // kein Ton geliefert: nächstes Modell probieren
 
           const rate = Number(/rate=(\d+)/.exec(inline.mimeType ?? '')?.[1] ?? 24000);
-          const wav = pcmToWav(Buffer.from(inline.data, 'base64'), rate);
+          const wav = pcmToWav(cleanPcm(Buffer.from(inline.data, 'base64'), rate), rate);
           await logUsage({ userId: user.id, kind: 'audio', provider: 'google', model });
           return new Response(new Uint8Array(wav), {
             headers: { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' },
