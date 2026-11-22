@@ -1,4 +1,4 @@
-# AI Platform 2026
+# AI Mesh Frickenhausen
 
 Chat mit mehreren KI-Anbietern (Google, OpenAI, Groq, Cohere, OpenRouter, NVIDIA NIM, Cloudflare Workers AI) plus Bildgenerierung über Pollinations.
 Mit Benutzerkonten, Admin-Bereich und einem Agent-Modus, der das eigene GitHub-Repo bearbeiten kann.
